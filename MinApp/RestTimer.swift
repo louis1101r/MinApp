@@ -1,4 +1,5 @@
 import ActivityKit
+import AudioToolbox
 import Foundation
 import Observation
 import UIKit
@@ -43,7 +44,7 @@ final class RestTimer {
         if newEnd <= Date() {
             // Den planlagte notifikation gælder det gamle tidspunkt, så den fjernes.
             stop()
-            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            Self.vibrate()
             return
         }
         updateActivity()
@@ -78,8 +79,12 @@ final class RestTimer {
     /// Pausen er slut: notifikationen får lov at komme (lyd + banner), resten ryddes.
     private func complete() {
         stop(removeNotification: false)
-        let g = UINotificationFeedbackGenerator()
-        g.notificationOccurred(.success)
+        Self.vibrate()
+    }
+
+    /// navigator.vibrate(...) i webappen: en rigtig vibration, ingen lyd.
+    static func vibrate() {
+        AudioServicesPlaySystemSound(kSystemSoundID_Vibrate)
     }
 
     private func watch() {
@@ -146,6 +151,8 @@ final class RestTimer {
         let content = UNMutableNotificationContent()
         content.title = "Pausen er slut"
         content.body = title + (detail.isEmpty ? "" : " · " + detail)
+        // Lyd er nødvendig for at telefonen vibrerer, når appen ikke er åben.
+        // På lydløs vibrerer den kun.
         content.sound = .default
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: interval, repeats: false)
         center.add(UNNotificationRequest(identifier: Self.notificationId, content: content, trigger: trigger), withCompletionHandler: nil)
@@ -156,7 +163,7 @@ final class RestTimer {
     }
 }
 
-/// Viser notifikationen som banner med lyd, også når appen er åben.
+/// Når appen er åben, vises notifikationen som banner uden lyd; appen vibrerer selv.
 final class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
     static let shared = NotificationDelegate()
 
@@ -165,6 +172,6 @@ final class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
         willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
-        completionHandler([.banner, .sound])
+        completionHandler([.banner])
     }
 }
