@@ -5,6 +5,6 @@ import WidgetKit
 struct MinAppWidgetBundle: WidgetBundle {
     var body: some Widget {
         MinAppHomeWidget()
-        CountdownLiveActivity()
+        RestLiveActivity()
     }
 }

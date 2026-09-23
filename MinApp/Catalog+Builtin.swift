@@ -1,0 +1,317 @@
+// Genereret fra docs/webapp.html (BUILTIN_EX og EXDESC). Ret ikke i hånden.
+
+extension Catalog {
+    /// BUILTIN_EX i samme rækkefølge som i webappen.
+    static let builtinList: [ExerciseDef] = [
+        ExerciseDef(id: "pullup", n: "Pull-ups med vægt", m: "Ryg", t: "u", lo: 6, hi: 10, s: 4, r: 180),
+        ExerciseDef(id: "pulldown", n: "Lat pulldown", m: "Ryg", t: "u", lo: 8, hi: 12, s: 3, r: 120),
+        ExerciseDef(id: "row", n: "Stangroning", m: "Ryg", t: "u", lo: 6, hi: 10, s: 4, r: 180),
+        ExerciseDef(id: "tbar", n: "T-bar roning", m: "Ryg", t: "u", lo: 8, hi: 12, s: 3, r: 150),
+        ExerciseDef(id: "dbrow", n: "Håndvægtsroning", m: "Ryg", t: "u", lo: 8, hi: 12, s: 3, r: 120),
+        ExerciseDef(id: "cablerow", n: "Kabelroning, siddende", m: "Ryg", t: "u", lo: 10, hi: 12, s: 3, r: 120),
+        ExerciseDef(id: "chestrow", n: "Brystunderstøttet roning", m: "Ryg", t: "u", lo: 8, hi: 12, s: 3, r: 120),
+        ExerciseDef(id: "pullover", n: "Kabelpullover", m: "Ryg", t: "u", lo: 12, hi: 15, s: 3, r: 90),
+        ExerciseDef(id: "shrug", n: "Shrugs", m: "Ryg", t: "u", lo: 10, hi: 15, s: 3, r: 90),
+        ExerciseDef(id: "facepull", n: "Face pull", m: "Bagskulder", t: "u", lo: 15, hi: 20, s: 3, r: 75),
+        ExerciseDef(id: "rear", n: "Omvendt flyes", m: "Bagskulder", t: "u", lo: 12, hi: 20, s: 3, r: 75),
+        ExerciseDef(id: "curl", n: "Stangcurl", m: "Biceps", t: "u", lo: 8, hi: 12, s: 3, r: 90),
+        ExerciseDef(id: "ezcurl", n: "EZ-stangcurl", m: "Biceps", t: "u", lo: 8, hi: 12, s: 3, r: 90),
+        ExerciseDef(id: "inccurl", n: "Skråbænkcurl", m: "Biceps", t: "u", lo: 10, hi: 15, s: 3, r: 75),
+        ExerciseDef(id: "hammer", n: "Hammercurl", m: "Biceps", t: "u", lo: 10, hi: 15, s: 3, r: 75),
+        ExerciseDef(id: "cablecurl", n: "Kabelcurl", m: "Biceps", t: "u", lo: 10, hi: 15, s: 3, r: 75),
+        ExerciseDef(id: "preacher", n: "Preacher curl", m: "Biceps", t: "u", lo: 8, hi: 12, s: 3, r: 90),
+        ExerciseDef(id: "bench", n: "Bænkpres", m: "Bryst", t: "u", lo: 5, hi: 8, s: 4, r: 180),
+        ExerciseDef(id: "incbb", n: "Skråbænkpres, stang", m: "Bryst", t: "u", lo: 6, hi: 10, s: 4, r: 180),
+        ExerciseDef(id: "incdb", n: "Skråbænkpres, håndvægte", m: "Bryst", t: "u", lo: 8, hi: 12, s: 3, r: 150),
+        ExerciseDef(id: "flatdb", n: "Bænkpres, håndvægte", m: "Bryst", t: "u", lo: 8, hi: 12, s: 3, r: 150),
+        ExerciseDef(id: "machpress", n: "Brystpres, maskine", m: "Bryst", t: "u", lo: 10, hi: 12, s: 3, r: 120),
+        ExerciseDef(id: "dip", n: "Dips med vægt", m: "Bryst", t: "u", lo: 6, hi: 10, s: 3, r: 150),
+        ExerciseDef(id: "cflye", n: "Kabelflyes", m: "Bryst", t: "u", lo: 12, hi: 15, s: 3, r: 90),
+        ExerciseDef(id: "pecdeck", n: "Butterfly", m: "Bryst", t: "u", lo: 12, hi: 15, s: 3, r: 90),
+        ExerciseDef(id: "ohp", n: "Militærpres, stående", m: "Skulder", t: "u", lo: 5, hi: 8, s: 3, r: 180),
+        ExerciseDef(id: "dbohp", n: "Skulderpres, håndvægte", m: "Skulder", t: "u", lo: 8, hi: 12, s: 3, r: 120),
+        ExerciseDef(id: "lat", n: "Sideløft", m: "Skulder", t: "u", lo: 12, hi: 20, s: 4, r: 75),
+        ExerciseDef(id: "cablelat", n: "Sideløft i kabel", m: "Skulder", t: "u", lo: 12, hi: 20, s: 3, r: 75),
+        ExerciseDef(id: "pushdown", n: "Triceps pushdown", m: "Triceps", t: "u", lo: 10, hi: 15, s: 3, r: 90),
+        ExerciseDef(id: "ropepush", n: "Pushdown med reb", m: "Triceps", t: "u", lo: 12, hi: 15, s: 3, r: 75),
+        ExerciseDef(id: "skull", n: "Franskpres, liggende", m: "Triceps", t: "u", lo: 8, hi: 12, s: 3, r: 90),
+        ExerciseDef(id: "ohtri", n: "Triceps over hovedet", m: "Triceps", t: "u", lo: 10, hi: 15, s: 3, r: 90),
+        ExerciseDef(id: "closebench", n: "Smalt bænkpres", m: "Triceps", t: "u", lo: 6, hi: 10, s: 3, r: 150),
+        ExerciseDef(id: "squat", n: "Squat", m: "Forlår", t: "l", lo: 4, hi: 6, s: 4, r: 240),
+        ExerciseDef(id: "frontsq", n: "Frontsquat", m: "Forlår", t: "l", lo: 6, hi: 8, s: 3, r: 180),
+        ExerciseDef(id: "hacksq", n: "Hack squat", m: "Forlår", t: "l", lo: 8, hi: 12, s: 3, r: 180),
+        ExerciseDef(id: "legpress", n: "Benpres", m: "Forlår", t: "l", lo: 8, hi: 12, s: 3, r: 150),
+        ExerciseDef(id: "bulgarian", n: "Bulgarsk splitsquat", m: "Forlår", t: "l", lo: 8, hi: 12, s: 3, r: 120),
+        ExerciseDef(id: "legext", n: "Benspark", m: "Forlår", t: "l", lo: 12, hi: 15, s: 3, r: 90),
+        ExerciseDef(id: "dl", n: "Dødløft", m: "Baglår", t: "l", lo: 3, hi: 5, s: 3, r: 240),
+        ExerciseDef(id: "rdl", n: "Rumænsk dødløft", m: "Baglår", t: "l", lo: 6, hi: 10, s: 4, r: 180),
+        ExerciseDef(id: "goodmorning", n: "Good morning", m: "Baglår", t: "l", lo: 8, hi: 12, s: 3, r: 150),
+        ExerciseDef(id: "legcurl", n: "Lårcurl, liggende", m: "Baglår", t: "l", lo: 10, hi: 15, s: 3, r: 90),
+        ExerciseDef(id: "seatedcurl", n: "Lårcurl, siddende", m: "Baglår", t: "l", lo: 10, hi: 15, s: 3, r: 90),
+        ExerciseDef(id: "hipthrust", n: "Hoftestød", m: "Balder", t: "l", lo: 8, hi: 12, s: 3, r: 120),
+        ExerciseDef(id: "calf", n: "Lægpres, stående", m: "Lægge", t: "l", lo: 8, hi: 12, s: 4, r: 75),
+        ExerciseDef(id: "seatedcalf", n: "Lægpres, siddende", m: "Lægge", t: "l", lo: 12, hi: 20, s: 3, r: 75),
+        ExerciseDef(id: "abs", n: "Kabelcrunch", m: "Mave", t: "u", lo: 10, hi: 15, s: 3, r: 75),
+        ExerciseDef(id: "legraise", n: "Hængende benløft", m: "Mave", t: "u", lo: 8, hi: 15, s: 3, r: 75),
+        ExerciseDef(id: "pallof", n: "Pallof press", m: "Mave", t: "u", lo: 10, hi: 15, s: 3, r: 60),
+    ]
+
+    /// EXDESC: s = udgangsstilling, u = udførelse, f = fokuspunkter, x = typiske fejl.
+    static let desc: [String: ExerciseDesc] = [
+        "pullup": ExerciseDesc(
+            s: "Hæng i stangen med overhåndsgreb lidt bredere end skulderbredde og vægten i et bælte eller mellem fødderne.",
+            u: "Træk dig op, til hagen er over stangen, ved at føre albuerne ned mod siderne. Sænk kontrolleret til strakte arme.",
+            f: ["Træk skulderbladene ned og tilbage, før du bøjer armene", "Hold brystet løftet og kroppen stille"],
+            x: ["Halve gentagelser uden at strække armene helt", "At svinge eller sparke sig op"]),
+        "pulldown": ExerciseDesc(
+            s: "Sæt dig med lårene under puderne og tag fat i stangen lidt bredere end skulderbredde.",
+            u: "Træk stangen ned til øverste del af brystet, mens du læner dig en smule bagover. Før den kontrolleret op igen.",
+            f: ["Tænk 'albuerne ned i baglommerne'", "Hold brystet oppe mod stangen"],
+            x: ["At læne sig langt bagover, så det bliver en roning", "At trække stangen ned bag nakken"]),
+        "row": ExerciseDesc(
+            s: "Stå med fødderne i hoftebredde, bøj i hofterne til overkroppen er omkring 45° eller lavere, og hold stangen i strakte arme.",
+            u: "Træk stangen op mod navlen ved at føre albuerne bagud, og sænk den kontrolleret.",
+            f: ["Neutral ryg hele vejen", "Klem skulderbladene sammen i toppen"],
+            x: ["At rette sig op undervejs og bruge fart", "Rund lænd"]),
+        "tbar": ExerciseDesc(
+            s: "Stå over stangen med bøjede knæ og hofter, ret ryg, og tag fat i håndtaget.",
+            u: "Træk vægten op mod brystet og sænk den kontrolleret til strakte arme.",
+            f: ["Hold overkroppens vinkel fast", "Albuerne tæt langs kroppen giver mere midterryg"],
+            x: ["At rykke vægten op med benene", "Rund ryg i tunge sæt"]),
+        "dbrow": ExerciseDesc(
+            s: "Støt det ene knæ og den ene hånd på en bænk med ryggen vandret, og hold håndvægten i den frie hånd.",
+            u: "Træk håndvægten op mod hoften og sænk den, til armen er strakt.",
+            f: ["Træk mod hoften, ikke mod skulderen", "Lad skulderbladet glide frem i bunden for fuldt stræk"],
+            x: ["At dreje overkroppen for at få vægten op"]),
+        "cablerow": ExerciseDesc(
+            s: "Sæt dig med fødderne mod pladen, let bøjede knæ og ret ryg, med armene strakt frem.",
+            u: "Træk håndtaget ind mod maven, mens du klemmer skulderbladene sammen, og før det kontrolleret tilbage.",
+            f: ["Sid rank – bevægelsen sker i armene og skulderbladene", "Hold en kort pause med håndtaget inde ved kroppen"],
+            x: ["At vippe hele overkroppen frem og tilbage"]),
+        "chestrow": ExerciseDesc(
+            s: "Læg brystet mod puden på en skråbænk eller maskine, med vægten i strakte arme.",
+            u: "Træk vægten op ved at føre albuerne bagud, og sænk den kontrolleret.",
+            f: ["Hold brystet mod puden hele tiden", "Fuldt stræk i bunden"],
+            x: ["At løfte brystet fra puden for at få vægten op"]),
+        "pullover": ExerciseDesc(
+            s: "Stå foran kabeltårnet med reb eller stang i højt træk, let foroverbøjet og med næsten strakte arme.",
+            u: "Før hænderne i en bue ned mod lårene og lad dem kontrolleret komme op igen.",
+            f: ["Bevægelsen sker i skulderen – albuerne holder en fast, let bøjning", "Mærk det i siden af ryggen, ikke i triceps"],
+            x: ["At bøje armene, så det bliver en pushdown"]),
+        "shrug": ExerciseDesc(
+            s: "Stå rank med en stang eller håndvægte i strakte arme langs kroppen.",
+            u: "Løft skuldrene lige op mod ørerne, hold et øjeblik, og sænk kontrolleret.",
+            f: ["Lige op og ned – ingen rulning", "Hold armene afslappede som kroge"],
+            x: ["At rulle skuldrene rundt", "For korte bevægelser med for tung vægt"]),
+        "facepull": ExerciseDesc(
+            s: "Sæt et reb i kabeltårnet i ansigtshøjde og tag fat med tommelfingrene bagud.",
+            u: "Træk rebet mod ansigtet og før hænderne ud til siderne, så albuerne ender højt og bagud.",
+            f: ["Albuerne på linje med skuldrene", "Tænk 'dobbelt biceps-pose' i slutpositionen"],
+            x: ["For tung vægt, så man læner sig bagud og trækker med ryggen"]),
+        "rear": ExerciseDesc(
+            s: "Bøj forover med ret ryg, eller læg dig på en skråbænk, med lette håndvægte hængende under brystet.",
+            u: "Løft armene ud til siderne med let bøjede albuer, til de er i højde med kroppen, og sænk kontrolleret.",
+            f: ["Led med albuerne, ikke hænderne", "Hold skulderbladene nogenlunde stille – det er bagskulderen der arbejder"],
+            x: ["At klemme skulderbladene sammen, så det bliver en rygøvelse", "For tung vægt og sving"]),
+        "curl": ExerciseDesc(
+            s: "Stå rank med stangen i underhåndsgreb i skulderbredde og strakte arme.",
+            u: "Bøj albuerne og løft stangen op mod skuldrene. Sænk den langsomt til strakte arme.",
+            f: ["Albuerne bliver ved siden af kroppen", "Sænk over 2–3 sekunder"],
+            x: ["At svinge med hofterne", "At føre albuerne frem i toppen"]),
+        "ezcurl": ExerciseDesc(
+            s: "Stå rank med EZ-stangen i de skrå greb og strakte arme.",
+            u: "Curl stangen op mod skuldrene og sænk den kontrolleret til strakte arme.",
+            f: ["Det skrå greb skåner håndleddene", "Hold overarmene stille"],
+            x: ["At læne sig bagover i de sidste gentagelser"]),
+        "inccurl": ExerciseDesc(
+            s: "Læn dig tilbage på en skråbænk (45–60°) med en håndvægt i hver hånd og armene hængende lodret.",
+            u: "Curl vægtene op uden at føre albuerne frem, og sænk dem helt ned.",
+            f: ["Lad armene hænge bag kroppen for maksimalt stræk", "Drej håndfladerne op i toppen"],
+            x: ["At løfte skuldrene fra bænken", "At afkorte bunden af bevægelsen"]),
+        "hammer": ExerciseDesc(
+            s: "Stå med en håndvægt i hver hånd og håndfladerne mod hinanden.",
+            u: "Curl vægtene op med tommelfingeren opad, og sænk kontrolleret.",
+            f: ["Hold håndleddet neutralt hele vejen", "Albuerne ved siden af kroppen"],
+            x: ["At svinge vægtene op"]),
+        "cablecurl": ExerciseDesc(
+            s: "Stå foran et kabeltårn med en stang eller et håndtag i lavt træk.",
+            u: "Curl håndtaget op mod skuldrene og sænk til strakte arme.",
+            f: ["Kablet holder spændingen – udnyt den i hele bevægelsen", "Stå stabilt, gerne med den ene fod lidt foran"],
+            x: ["At stå så tæt på tårnet, at spændingen forsvinder i toppen"]),
+        "preacher": ExerciseDesc(
+            s: "Sæt dig ved preacher-bænken med bagsiden af overarmene hvilende på puden.",
+            u: "Curl stangen op og sænk den langsomt til næsten strakte arme.",
+            f: ["Overarmen bliver på puden hele tiden", "Særligt langsom i bunden – her er biceps mest sårbar"],
+            x: ["At slippe vægten i bunden og hoppe ud af strækket"]),
+        "bench": ExerciseDesc(
+            s: "Lig på bænken med øjnene under stangen, fødderne plantet og skulderbladene trukket sammen og ned.",
+            u: "Sænk stangen kontrolleret til nederste del af brystet og pres den op til strakte arme.",
+            f: ["Albuerne 45–70° ud fra kroppen, ikke 90°", "Behold spændingen i ryggen og fødderne mod gulvet"],
+            x: ["At lade stangen hoppe på brystet", "At løfte hovedet eller hofterne"]),
+        "incbb": ExerciseDesc(
+            s: "Lig på en skråbænk (30–45°) med skulderbladene samlet og stangen over skuldrene.",
+            u: "Sænk stangen til øverste del af brystet og pres den op igen.",
+            f: ["Lav vinkel (omkring 30°) rammer brystet mere end skulderen", "Håndleddene lodret over albuerne"],
+            x: ["For stejl bænk, så det bliver en skulderøvelse"]),
+        "incdb": ExerciseDesc(
+            s: "Lig på en skråbænk med en håndvægt i hver hånd over brystet.",
+            u: "Sænk håndvægtene ud til siden af brystet og pres dem op og let ind mod hinanden.",
+            f: ["Du kan gå dybere end med stang – udnyt det", "Kontrol i bunden"],
+            x: ["At lade vægtene falde for langt ned uden kontrol"]),
+        "flatdb": ExerciseDesc(
+            s: "Lig på en flad bænk med håndvægte over brystet og fødderne plantet.",
+            u: "Sænk vægtene til siden af brystet og pres dem op igen.",
+            f: ["Skulderbladene samlet og ned", "Albuerne lidt ind mod kroppen"],
+            x: ["At slå vægtene sammen i toppen og miste spændingen"]),
+        "machpress": ExerciseDesc(
+            s: "Indstil sædet, så håndtagene er ud for midten af brystet, og sæt dig med ryggen mod puden.",
+            u: "Pres håndtagene frem til næsten strakte arme og før dem kontrolleret tilbage.",
+            f: ["Skulderbladene mod puden", "Kontrolleret tilbagevej"],
+            x: ["Sædet for højt eller lavt, så skuldrene tager over"]),
+        "dip": ExerciseDesc(
+            s: "Støt dig på dipsstativet med strakte arme og vægt i et bælte.",
+            u: "Sænk dig ved at bøje albuerne, til overarmene er omkring vandrette, og pres dig op igen.",
+            f: ["Læn overkroppen let frem for mere bryst", "Skuldrene nede, væk fra ørerne"],
+            x: ["At gå for dybt, hvis det giver smerter i skulderen", "Halve gentagelser"]),
+        "cflye": ExerciseDesc(
+            s: "Stå midt mellem to kabeltårne med håndtagene i skulderhøjde og armene ude til siden med let bøjede albuer.",
+            u: "Før hænderne sammen foran brystet i en bue og lad dem kontrolleret gå tilbage.",
+            f: ["Fast, let bøjning i albuerne – det er en bue, ikke et pres", "Mærk strækket i brystet"],
+            x: ["At bøje og strække albuerne undervejs"]),
+        "pecdeck": ExerciseDesc(
+            s: "Sæt dig i maskinen med ryggen mod puden og håndtagene i brysthøjde.",
+            u: "Før armene sammen foran dig og lad dem langsomt gå tilbage til et let stræk.",
+            f: ["Brystet frem, skuldrene tilbage", "Kort pause, når hænderne mødes"],
+            x: ["At lade vægtstakken smække i bunden"]),
+        "ohp": ExerciseDesc(
+            s: "Stå med fødderne i hoftebredde, stangen på forsiden af skuldrene og albuerne let foran stangen.",
+            u: "Pres stangen lodret op over hovedet til strakte arme, og sænk den kontrolleret til skuldrene.",
+            f: ["Spænd baller og mave – ingen svaj i lænden", "Før hovedet tilbage og så frem under stangen i toppen"],
+            x: ["At læne sig langt bagover", "At hjælpe med benene"]),
+        "dbohp": ExerciseDesc(
+            s: "Sid på en bænk med ryglæn og håndvægtene ud for skuldrene.",
+            u: "Pres vægtene op over hovedet og sænk dem kontrolleret til skulderhøjde.",
+            f: ["Ryggen mod ryglænet", "Albuerne lidt frem, ikke helt ude til siden"],
+            x: ["At svaje i lænden"]),
+        "lat": ExerciseDesc(
+            s: "Stå med en let håndvægt i hver hånd ned langs siden.",
+            u: "Løft armene ud til siden til skulderhøjde med let bøjede albuer, og sænk langsomt.",
+            f: ["Led med albuerne", "Et let foroverlæn rammer sideskulderen bedre"],
+            x: ["At svinge vægtene op med kroppen", "At trække skuldrene op mod ørerne"]),
+        "cablelat": ExerciseDesc(
+            s: "Stå sidelæns til et kabeltårn med håndtaget i lavt træk i den hånd, der er længst væk.",
+            u: "Løft armen ud til siden til skulderhøjde og sænk kontrolleret.",
+            f: ["Kablet giver spænding i bunden, hvor håndvægte er lette", "Hold kroppen stille"],
+            x: ["At læne sig væk fra tårnet for at snyde"]),
+        "pushdown": ExerciseDesc(
+            s: "Stå foran kabeltårnet med en stang i højt træk og albuerne ind til siden.",
+            u: "Pres stangen ned til strakte arme og lad den komme kontrolleret op til omkring 90° i albuen.",
+            f: ["Overarmene står stille", "Stræk helt ud i bunden"],
+            x: ["At læne sig ind over og presse med kropsvægten"]),
+        "ropepush": ExerciseDesc(
+            s: "Stå foran kabeltårnet med rebet i højt træk og albuerne ind til siden.",
+            u: "Pres rebet ned, før enderne lidt fra hinanden i bunden, og lad det komme kontrolleret op.",
+            f: ["Spred rebet i bunden for fuld sammentrækning", "Overarmene står stille"],
+            x: ["At lade albuerne glide frem"]),
+        "skull": ExerciseDesc(
+            s: "Lig på en bænk med en EZ-stang i strakte arme over brystet.",
+            u: "Bøj albuerne og sænk stangen mod panden eller lidt bag hovedet, og stræk armene igen.",
+            f: ["Albuerne peger mod loftet og holdes smalle", "Lad overarmen tippe lidt bagud for mere stræk"],
+            x: ["At lade albuerne glide ud", "At sænke ukontrolleret mod hovedet"]),
+        "ohtri": ExerciseDesc(
+            s: "Stå eller sid med en håndvægt, et reb eller en EZ-stang holdt over hovedet.",
+            u: "Sænk vægten bag hovedet ved at bøje albuerne, og stræk armene op igen.",
+            f: ["Albuerne peger frem og holdes tæt", "Fuldt stræk i bunden – det er pointen med øvelsen"],
+            x: ["At svaje i lænden"]),
+        "closebench": ExerciseDesc(
+            s: "Lig på bænken og tag fat i stangen i skulderbredde.",
+            u: "Sænk stangen til nederste del af brystet med albuerne tæt på kroppen, og pres op.",
+            f: ["Albuerne ind langs siden", "Skulderbredde er smalt nok"],
+            x: ["Et meget smalt greb, der belaster håndleddene"]),
+        "squat": ExerciseDesc(
+            s: "Stangen på øvre ryg, fødderne i omkring skulderbredde med tæerne let udad, og spænd maven.",
+            u: "Sæt dig ned ved at bøje knæ og hofter samtidig, til hofterne er mindst i knæhøjde, og rejs dig igen.",
+            f: ["Knæene følger tæernes retning", "Hele foden i gulvet og neutral ryg"],
+            x: ["At knæene falder ind", "At hælene løfter sig", "At lænden runder i bunden"]),
+        "frontsq": ExerciseDesc(
+            s: "Stangen hviler på forsiden af skuldrene med albuerne højt fremme.",
+            u: "Sæt dig lige ned med oprejst overkrop og rejs dig igen.",
+            f: ["Albuerne op – så bliver stangen liggende", "Oprejst overkrop"],
+            x: ["At albuerne falder, så stangen ruller frem"]),
+        "hacksq": ExerciseDesc(
+            s: "Stil dig i maskinen med ryggen mod puden og fødderne midt på pladen.",
+            u: "Sænk dig kontrolleret så dybt, du kan med god kontrol, og pres op igen.",
+            f: ["Dybde frem for vægt", "Pres gennem hele foden"],
+            x: ["At låse knæene hårdt i toppen"]),
+        "legpress": ExerciseDesc(
+            s: "Sæt dig med ryggen mod puden og fødderne i skulderbredde midt på pladen.",
+            u: "Sænk pladen ved at bøje knæene til omkring 90° eller dybere, og pres den op igen.",
+            f: ["Lænden bliver mod puden", "Knæene i tæernes retning"],
+            x: ["At gå så dybt, at hofterne ruller op fra sædet", "At låse knæene helt ud"]),
+        "bulgarian": ExerciseDesc(
+            s: "Stå med ryggen til en bænk og den bageste fod på bænken, med håndvægte i hænderne.",
+            u: "Sænk dig lige ned, til det bageste knæ næsten rører gulvet, og pres op gennem den forreste fod.",
+            f: ["Det meste af vægten på forreste ben", "Let foroverlæn giver mere baller, oprejst mere forlår"],
+            x: ["For kort skridt, så hælen løfter sig"]),
+        "legext": ExerciseDesc(
+            s: "Sæt dig i maskinen med knæene ud for maskinens drejepunkt og puden på underbenene.",
+            u: "Stræk benene helt og sænk kontrolleret.",
+            f: ["Kort pause i toppen", "Hold hofterne i sædet"],
+            x: ["At kaste vægten op"]),
+        "dl": ExerciseDesc(
+            s: "Stå med midtfoden under stangen, tag fat lige uden for benene, sænk hofterne og ret ryggen.",
+            u: "Skub gulvet væk og rejs dig med stangen tæt på benene, til du står rank. Sænk den kontrolleret.",
+            f: ["Stangen skal røre benene hele vejen", "Spænd ryg og mave, før du løfter"],
+            x: ["Rund ryg", "At rykke stangen fra gulvet", "At læne sig bagover i toppen"]),
+        "rdl": ExerciseDesc(
+            s: "Stå rank med stangen i strakte arme og let bøjede knæ.",
+            u: "Skub hofterne bagud og sænk stangen langs benene, til du mærker stræk i baglårene. Rejs dig ved at skubbe hofterne frem.",
+            f: ["Det er et hofteknæk, ikke en squat", "Stop når ryggen begynder at runde"],
+            x: ["At bøje for meget i knæene", "At lade stangen glide væk fra benene"]),
+        "goodmorning": ExerciseDesc(
+            s: "Stangen på øvre ryg som ved squat, let bøjede knæ.",
+            u: "Bøj i hofterne med ret ryg, til overkroppen er næsten vandret, og rejs dig igen.",
+            f: ["Lette vægte og streng teknik", "Hofterne bagud"],
+            x: ["Rund ryg – øvelsen er kun god med neutral ryg"]),
+        "legcurl": ExerciseDesc(
+            s: "Læg dig på maven i maskinen med puden lige over hælene.",
+            u: "Curl hælene op mod ballerne og sænk kontrolleret.",
+            f: ["Pres hofterne ned i puden", "Langsom vej ned"],
+            x: ["At løfte hofterne for at få vægten op"]),
+        "seatedcurl": ExerciseDesc(
+            s: "Sæt dig i maskinen med puden over lårene og underbenspuden over hælene.",
+            u: "Pres hælene ned og bagud så langt, du kan, og lad dem komme kontrolleret frem.",
+            f: ["Læn dig let frem for mere stræk i baglåret", "Fuld bevægelse"],
+            x: ["For korte gentagelser"]),
+        "hipthrust": ExerciseDesc(
+            s: "Sid med skulderbladene mod en bænk, stangen over hofterne (med pude) og fødderne plantet.",
+            u: "Pres hofterne op, til kroppen er vandret fra skuldre til knæ, klem ballerne, og sænk igen.",
+            f: ["Hagen let ned mod brystet", "Skinnebenene lodrette i toppen"],
+            x: ["At svaje i lænden i stedet for at strække hofterne"]),
+        "calf": ExerciseDesc(
+            s: "Stå med forfoden på en kant og hælene frit, i maskinen eller med vægt.",
+            u: "Sænk hælene så langt ned, du kan, pres op på tæerne og hold kort i toppen.",
+            f: ["Fuldt stræk i bunden – hold et sekund", "Strakte knæ"],
+            x: ["At hoppe op og ned med korte bevægelser"]),
+        "seatedcalf": ExerciseDesc(
+            s: "Sid i maskinen med puden på lårene lige over knæene og forfoden på kanten.",
+            u: "Sænk hælene helt og pres op på tæerne.",
+            f: ["Bøjede knæ rammer den dybe lægmuskel", "Langsomt og fuldt udsving"],
+            x: ["For tung vægt og for kort bevægelse"]),
+        "abs": ExerciseDesc(
+            s: "Knæl foran kabeltårnet med rebet i højt træk holdt ved siden af hovedet.",
+            u: "Krøl overkroppen ned mod knæene ved at runde ryggen, og rul kontrolleret op igen.",
+            f: ["Bevægelsen sker i maven – hofterne står stille", "Pust ud i bunden"],
+            x: ["At sætte sig bagover og trække med armene"]),
+        "legraise": ExerciseDesc(
+            s: "Hæng i en stang med strakte arme.",
+            u: "Løft benene, bøjede eller strakte, ved at vippe bækkenet op, og sænk dem kontrolleret.",
+            f: ["Tænk 'bækkenet op mod navlen', ikke bare benene op", "Undgå at svinge"],
+            x: ["At bruge sving i stedet for mavemusklerne"]),
+        "pallof": ExerciseDesc(
+            s: "Stå sidelæns til et kabeltårn med håndtaget i brysthøjde, holdt med begge hænder ind mod brystet.",
+            u: "Pres håndtaget lige frem til strakte arme, hold, og træk det tilbage – uden at lade kroppen dreje.",
+            f: ["Modstå rotationen – det er hele øvelsen", "Spænd baller og mave"],
+            x: ["At dreje med kablet"]),
+    ]
+}
