@@ -23,15 +23,35 @@ final class RestTimer {
 
     var isRunning: Bool { endDate != nil }
 
+    init() {
+        restoreFromActivity()
+    }
+
+    /// Hvis appen er startet igen (fx af en knap i Live Activity), overtages den kørende pause.
+    private func restoreFromActivity() {
+        guard let a = Activity<RestActivityAttributes>.activities.first else { return }
+        let s = a.content.state
+        activity = a
+        workout = a.attributes.workout
+        title = s.title
+        detail = s.detail
+        if s.endDate > Date() {
+            startDate = s.startDate
+            endDate = s.endDate
+            watch()
+        }
+    }
+
     func start(seconds: Int, workout: String, title: String, detail: String) {
-        stop()
+        watcher?.cancel()
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [Self.notificationId])
         let now = Date()
         startDate = now
         endDate = now.addingTimeInterval(TimeInterval(seconds))
         self.workout = workout
         self.title = title
         self.detail = detail
-        startActivity()
+        showActivity()
         scheduleNotification()
         watch()
     }
@@ -111,17 +131,26 @@ final class RestTimer {
         )
     }
 
-    private func startActivity() {
-        guard ActivityAuthorizationInfo().areActivitiesEnabled, let state else { return }
-        do {
-            activity = try Activity<RestActivityAttributes>.request(
-                attributes: RestActivityAttributes(workout: workout),
-                content: ActivityContent(state: state, staleDate: state.endDate),
-                pushType: nil
-            )
-        } catch {
-            activity = nil
+    /// Viser pausen i Live Activity. En eksisterende aktivitet opdateres i stedet for at
+    /// starte en ny, så det også virker, når appen er i baggrunden (knapperne i Live Activity).
+    private func showActivity() {
+        guard let state else { return }
+        let content = ActivityContent(state: state, staleDate: state.endDate)
+        let all = Activity<RestActivityAttributes>.activities
+        if let existing = activity ?? all.first {
+            activity = existing
+            for other in all where other.id != existing.id {
+                Task { await other.end(nil, dismissalPolicy: .immediate) }
+            }
+            Task { await existing.update(content) }
+            return
         }
+        guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
+        activity = try? Activity<RestActivityAttributes>.request(
+            attributes: RestActivityAttributes(workout: workout),
+            content: content,
+            pushType: nil
+        )
     }
 
     private func updateActivity() {

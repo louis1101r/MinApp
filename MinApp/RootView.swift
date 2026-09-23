@@ -3,7 +3,7 @@ import SwiftUI
 struct RootView: View {
     @Environment(TrainingStore.self) private var store
     @Environment(\.scenePhase) private var scenePhase
-    @State private var infoId: InfoTarget?
+    @State private var route: Route?
 
     var body: some View {
         // NavigationStack kun for at tastaturets "Færdig"-knap virker; navigationslinjen er skjult.
@@ -28,36 +28,16 @@ struct RootView: View {
                 content
                     .frame(maxWidth: T.maxWidth)
                     .padding(.horizontal, 18)
-                    .padding(.bottom, store.timer.isRunning ? 110 : 40)
+                    .padding(.bottom, store.timer.isRunning ? 90 : 30)
                     .frame(maxWidth: .infinity)
             }
             .scrollDismissesKeyboard(.interactively)
             // Ny skærm starter øverst, som window.scrollTo(0,0) i webappen.
             .id(screenKey)
+            .overlay(alignment: .bottom) { floating }
+            NavBar()
         }
         .background(T.bg.ignoresSafeArea())
-        .overlay(alignment: .bottom) {
-            VStack(spacing: 10) {
-                if let msg = store.toastMessage {
-                    Text(msg)
-                        .font(.system(size: 14, weight: .semibold))
-                        .multilineTextAlignment(.center)
-                        .foregroundStyle(T.onInk)
-                        .padding(.horizontal, 18)
-                        .padding(.vertical, 12)
-                        .background(T.ink)
-                        .padding(.horizontal, 24)
-                        .transition(.opacity.combined(with: .move(edge: .bottom)))
-                }
-                if store.timer.isRunning {
-                    TimerPill()
-                        .transition(.opacity.combined(with: .move(edge: .bottom)))
-                }
-            }
-            .padding(.bottom, 12)
-            .animation(.easeOut(duration: 0.22), value: store.toastMessage)
-            .animation(.easeOut(duration: 0.22), value: store.timer.isRunning)
-        }
         .onAppear {
             RestTimer.requestNotificationPermission()
             store.timer.checkExpired()
@@ -65,15 +45,34 @@ struct RootView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { store.timer.checkExpired() }
         }
-        .sheet(item: $infoId) { target in
-            switch target {
-            case .exercise(let id):
-                ExerciseInfoView(id: id)
-            case .rir:
-                RIRInfoView()
+        .sheet(item: $route) { r in
+            RouteSheet(route: r)
+        }
+        .environment(\.present, PresentAction { route = $0 })
+    }
+
+    /// Toast og hviletimer over navigationen.
+    private var floating: some View {
+        VStack(spacing: 10) {
+            if let msg = store.toastMessage {
+                Text(msg)
+                    .font(.system(size: 14, weight: .semibold))
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(T.onInk)
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 12)
+                    .background(T.ink)
+                    .padding(.horizontal, 24)
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+            }
+            if store.timer.isRunning {
+                TimerPill()
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
         }
-        .environment(\.showInfo, ShowInfoAction { infoId = $0 })
+        .padding(.bottom, 12)
+        .animation(.easeOut(duration: 0.22), value: store.toastMessage)
+        .animation(.easeOut(duration: 0.22), value: store.timer.isRunning)
     }
 
     private var header: some View {
@@ -100,56 +99,193 @@ struct RootView: View {
     }
 
     private var screenKey: String {
-        store.adjustments != nil ? "finish" : (store.active != nil ? "session" : "home")
+        switch store.tab {
+        case .home:
+            return store.adjustments != nil ? "finish" : (store.active != nil ? "session" : "home")
+        case .hist:
+            return "hist"
+        case .set:
+            return "set"
+        }
     }
 
     @ViewBuilder
     private var content: some View {
-        if let adj = store.adjustments {
-            FinishView(adjustments: adj)
-                .transition(.opacity)
-        } else if store.active != nil {
-            SessionView()
-                .transition(.opacity)
-        } else {
-            HomeView()
-                .transition(.opacity)
+        switch store.tab {
+        case .home:
+            if let adj = store.adjustments {
+                FinishView(adjustments: adj)
+            } else if store.active != nil {
+                SessionView()
+            } else {
+                HomeView()
+            }
+        case .hist:
+            HistoryView()
+        case .set:
+            ProgramView()
         }
     }
 }
 
-// MARK: - Info-ark
+/// nav: Træning · Udvikling · Program
+struct NavBar: View {
+    @Environment(TrainingStore.self) private var store
 
-enum InfoTarget: Identifiable, Hashable {
-    case exercise(String)
+    var body: some View {
+        HStack(spacing: 0) {
+            item("Træning", .home)
+            Rectangle().fill(T.hair).frame(width: 1)
+            item("Udvikling", .hist)
+            Rectangle().fill(T.hair).frame(width: 1)
+            item("Program", .set)
+        }
+        .fixedSize(horizontal: false, vertical: true)
+        .frame(maxWidth: T.maxWidth)
+        .frame(maxWidth: .infinity)
+        .background(T.bg)
+        .overlay(alignment: .top) { Rectangle().fill(T.line).frame(height: 2) }
+    }
+
+    private func item(_ label: String, _ t: Tab) -> some View {
+        let on = store.tab == t
+        return Button {
+            hideKeyboard()
+            withAnimation(.easeOut(duration: 0.18)) {
+                // go(t): slutskærmen forsvinder, når man skifter fane.
+                store.adjustments = nil
+                store.tab = t
+            }
+        } label: {
+            Text(label)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(on ? T.ink : T.muted)
+                .frame(maxWidth: .infinity, minHeight: 50)
+                .overlay(alignment: .top) {
+                    if on { Rectangle().fill(T.ink).frame(height: 3).padding(.top, 2) }
+                }
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(PressScaleStyle())
+    }
+}
+
+// MARK: - Ark
+
+/// De ark, webappen viser med showSheet().
+enum Route: Identifiable {
+    case info(String)
     case rir
+    case swap(String, inSession: Bool)
+    case pickerGroup(String)
+    case pickerSession
+    case create(group: String, toSession: Bool)
+    case stats(String)
 
     var id: String {
         switch self {
-        case .exercise(let id): return "ex-" + id
+        case .info(let id): return "info-" + id
         case .rir: return "rir"
+        case .swap(let id, let s): return "swap-\(id)-\(s)"
+        case .pickerGroup(let g): return "picker-" + g
+        case .pickerSession: return "picker-session"
+        case .create(let g, let s): return "create-\(g)-\(s)"
+        case .stats(let id): return "stats-" + id
         }
     }
 }
 
-struct ShowInfoAction {
-    var action: (InfoTarget) -> Void
-    init(_ action: @escaping (InfoTarget) -> Void = { _ in }) {
+/// Visninger, der skubbes ind i et ark (ⓘ fra en liste, "Opret ny øvelse" fra tilføj).
+enum SheetPush: Hashable {
+    case info(String)
+    case create(group: String, toSession: Bool)
+}
+
+struct PresentAction {
+    var action: (Route) -> Void
+    init(_ action: @escaping (Route) -> Void = { _ in }) {
         self.action = action
     }
-    func callAsFunction(_ t: InfoTarget) {
-        action(t)
+    func callAsFunction(_ r: Route) {
+        action(r)
     }
 }
 
-private struct ShowInfoKey: EnvironmentKey {
-    static let defaultValue = ShowInfoAction()
+private struct PresentKey: EnvironmentKey {
+    static let defaultValue = PresentAction()
 }
 
 extension EnvironmentValues {
-    var showInfo: ShowInfoAction {
-        get { self[ShowInfoKey.self] }
-        set { self[ShowInfoKey.self] = newValue }
+    var present: PresentAction {
+        get { self[PresentKey.self] }
+        set { self[PresentKey.self] = newValue }
+    }
+}
+
+/// Luk hele arket (også fra en visning, der er skubbet ind).
+struct CloseSheetAction {
+    var action: () -> Void = {}
+    func callAsFunction() { action() }
+}
+
+private struct CloseSheetKey: EnvironmentKey {
+    static let defaultValue = CloseSheetAction()
+}
+
+extension EnvironmentValues {
+    var closeSheet: CloseSheetAction {
+        get { self[CloseSheetKey.self] }
+        set { self[CloseSheetKey.self] = newValue }
+    }
+}
+
+struct RouteSheet: View {
+    let route: Route
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            root
+                .navigationDestination(for: SheetPush.self) { p in
+                    switch p {
+                    case .info(let id):
+                        ExerciseInfoView(id: id, pushed: true)
+                    case .create(let g, let s):
+                        CreateExerciseView(group: g, toSession: s, pushed: true)
+                    }
+                }
+                .toolbar {
+                    ToolbarItemGroup(placement: .keyboard) {
+                        Spacer()
+                        Button("Færdig") { hideKeyboard() }
+                            .font(.system(size: 16, weight: .semibold))
+                    }
+                }
+        }
+        .environment(\.closeSheet, CloseSheetAction { dismiss() })
+        .presentationDragIndicator(.visible)
+        .presentationCornerRadius(0)
+        .tint(T.blue)
+    }
+
+    @ViewBuilder
+    private var root: some View {
+        switch route {
+        case .info(let id):
+            ExerciseInfoView(id: id)
+        case .rir:
+            RIRInfoView()
+        case .swap(let id, let inSession):
+            SwapView(id: id, inSession: inSession)
+        case .pickerGroup(let g):
+            PickerView(group: g)
+        case .pickerSession:
+            PickerView(group: nil)
+        case .create(let g, let s):
+            CreateExerciseView(group: g, toSession: s, pushed: false)
+        case .stats(let id):
+            StatsView(id: id)
+        }
     }
 }
 

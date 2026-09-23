@@ -1,13 +1,15 @@
 import SwiftUI
 
 /// showExInfo(id): udgangsstilling, udførelse, fokuspunkter og typiske fejl.
+/// Åbnet fra en liste står der "Tilbage" (infoBack() i webappen), ellers "Luk".
 struct ExerciseInfoView: View {
     @Environment(TrainingStore.self) private var store
     @Environment(\.dismiss) private var dismiss
     let id: String
+    var pushed = false
 
     var body: some View {
-        InfoSheet(title: store.name(id), close: { dismiss() }) {
+        InfoSheet(title: store.name(id), closeLabel: pushed ? "Tilbage" : "Luk", close: { dismiss() }) {
             if let x = store.EX(id) {
                 Text("\(x.m) · \(store.stSets(id)) × \(x.lo)–\(x.hi) · pause \(restLabel(x.r))")
                     .leadStyle()
@@ -31,7 +33,7 @@ struct ExerciseInfoView: View {
                         .padding(.top, 18)
                 }
             }
-            Button("Forstået") { dismiss() }
+            Button(pushed ? "Tilbage" : "Forstået") { dismiss() }
                 .buttonStyle(BlockButtonStyle(outline: true))
                 .padding(.top, 24)
         }
@@ -56,9 +58,10 @@ struct RIRInfoView: View {
     }
 }
 
-/// Ark med sheetHead(): titel og luk-knap. Træk ned for at lukke.
+/// Et ark med sheetHead(): titel og luk-knap.
 struct InfoSheet<Content: View>: View {
     let title: String
+    var closeLabel = "Luk"
     let close: () -> Void
     @ViewBuilder var content: Content
 
@@ -70,7 +73,7 @@ struct InfoSheet<Content: View>: View {
                         .displayStyle(26)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer()
-                    Button("Luk", action: close)
+                    Button(closeLabel, action: close)
                         .buttonStyle(TextLinkStyle())
                 }
                 content
@@ -82,9 +85,9 @@ struct InfoSheet<Content: View>: View {
             .padding(.bottom, 40)
             .frame(maxWidth: .infinity)
         }
+        .scrollDismissesKeyboard(.interactively)
         .background(T.bg.ignoresSafeArea())
-        .presentationDragIndicator(.visible)
-        .presentationCornerRadius(0)
+        .toolbar(.hidden, for: .navigationBar)
     }
 }
 

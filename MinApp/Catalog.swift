@@ -62,9 +62,23 @@ enum Catalog {
 
 // MARK: - Hjælpefunktioner der svarer til webappens
 
-/// JS Math.round(v/s)*s. Math.round runder .5 op mod +∞, derfor floor(x + 0.5).
+/// JS Math.round: runder .5 op mod +∞, derfor floor(x + 0.5).
+func jsRound(_ x: Double) -> Double {
+    (x + 0.5).rounded(.down)
+}
+
+/// rnd(v, s) = Math.round(v/s)*s
 func rnd(_ v: Double, _ s: Double) -> Double {
-    (v / s + 0.5).rounded(.down) * s
+    jsRound(v / s) * s
+}
+
+/// kg(v): Math.round(v).toLocaleString("da-DK") + " kg"
+func kg(_ v: Double) -> String {
+    let f = NumberFormatter()
+    f.locale = Locale(identifier: "da_DK")
+    f.numberStyle = .decimal
+    f.maximumFractionDigits = 0
+    return (f.string(from: NSNumber(value: jsRound(v))) ?? String(Int(jsRound(v)))) + " kg"
 }
 
 /// fmt(): én decimal, komma som decimaltegn, "–" for manglende værdi.

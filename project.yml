@@ -35,6 +35,11 @@ targets:
         NSSupportsLiveActivities: true
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
+        # Genvej: minapp://?w=72,5 sætter vægten i næste sæt (webappens ?w=)
+        CFBundleURLTypes:
+          - CFBundleURLName: com.louis.MinApp
+            CFBundleURLSchemes:
+              - minapp
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.louis.MinApp

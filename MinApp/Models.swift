@@ -40,6 +40,16 @@ struct LogEntry: Codable, Hashable {
     var sets: [LogSet]
 }
 
+/// En logpost i hukommelsen (entries er afkodet én gang ved indlæsning).
+struct LogRecord: Hashable {
+    var name: String
+    var groups: [String]
+    var date: String
+    var ts: Double
+    var readiness: Int
+    var entries: [LogEntry]
+}
+
 /// D.log[] = { name, groups, date: "dd.mm.yyyy", ts, readiness, entries }
 @Model
 final class WorkoutLog {
@@ -63,6 +73,10 @@ final class WorkoutLog {
 
     var entries: [LogEntry] {
         (try? JSONDecoder().decode([LogEntry].self, from: entriesData)) ?? []
+    }
+
+    var record: LogRecord {
+        LogRecord(name: name, groups: groups, date: date, ts: ts, readiness: readiness, entries: entries)
     }
 }
 

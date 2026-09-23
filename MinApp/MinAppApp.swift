@@ -19,13 +19,19 @@ struct MinAppApp: App {
             fatalError("Kunne ikke åbne databasen: \(error)")
         }
         self.container = container
-        _store = State(initialValue: TrainingStore(context: container.mainContext))
+        let store = TrainingStore(context: container.mainContext)
+        _store = State(initialValue: store)
+
+        // Knapperne i Live Activity (App Intents) kører i appens proces.
+        RestIntentBridge.completeSet = { [weak store] in store?.completeNextSet() }
+        RestIntentBridge.addTime = { [weak store] sec in store?.timer.adjust(sec) }
     }
 
     var body: some Scene {
         WindowGroup {
             RootView()
                 .environment(store)
+                .onOpenURL { url in store.applyQuick(url) }
         }
         .modelContainer(container)
     }

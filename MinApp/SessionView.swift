@@ -4,6 +4,7 @@ import UIKit
 /// viewSession(): igangværende træning med sæt-tabel, ✓-knap og pause.
 struct SessionView: View {
     @Environment(TrainingStore.self) private var store
+    @Environment(\.present) private var present
     @State private var confirmCancel = false
 
     var body: some View {
@@ -29,7 +30,7 @@ struct SessionView: View {
                     .padding(.top, 8)
 
                 if a.ex.isEmpty {
-                    Text("Der er ingen øvelser i dagens træning.")
+                    Text("Der er ingen øvelser i dagens træning. Tilføj en herunder.")
                         .leadStyle()
                         .padding(.vertical, 24)
                 }
@@ -38,12 +39,19 @@ struct SessionView: View {
                     ExerciseBlock(i: i, e: e)
                 }
 
+                Button("+ Tilføj øvelse") {
+                    hideKeyboard()
+                    present(.pickerSession)
+                }
+                .buttonStyle(BlockButtonStyle(outline: true))
+                .padding(.top, 22)
+
                 Button("Afslut og opdatér vægtene") {
                     hideKeyboard()
                     withAnimation(.easeOut(duration: 0.18)) { store.finish() }
                 }
                 .buttonStyle(BlockButtonStyle())
-                .padding(.top, 22)
+                .padding(.top, 12)
                 .padding(.bottom, 10)
             }
             .padding(.top, 20)
@@ -80,7 +88,8 @@ struct ProgressBar: View {
 /// Én øvelse (.ex) med sæt-tabellen.
 struct ExerciseBlock: View {
     @Environment(TrainingStore.self) private var store
-    @Environment(\.showInfo) private var showInfo
+    @Environment(\.present) private var present
+    @State private var confirmRemove = false
     let i: Int
     let e: ActiveExercise
 
@@ -95,7 +104,7 @@ struct ExerciseBlock: View {
                             .tracking(-0.4)
                             .fixedSize(horizontal: false, vertical: true)
                         Button {
-                            showInfo(.exercise(e.id))
+                            present(.info(e.id))
                         } label: {
                             Text("ⓘ")
                                 .font(.system(size: 15))
@@ -118,8 +127,26 @@ struct ExerciseBlock: View {
                     Text("⚠ stagneret")
                         .font(.system(size: 11, weight: .bold))
                         .foregroundStyle(T.red)
+                        .fixedSize()
                         .padding(.top, 4)
                 }
+                Button {
+                    hideKeyboard()
+                    if store.hasLogged(i) {
+                        confirmRemove = true
+                    } else {
+                        withAnimation(.easeOut(duration: 0.18)) { store.removeFromSession(i) }
+                    }
+                } label: {
+                    Text("✕")
+                        .font(.system(size: 15))
+                        .foregroundStyle(T.muted)
+                        .frame(width: 40, height: 32)
+                        .contentShape(Rectangle())
+                }
+                .accessibilityLabel("Fjern fra dagens træning")
+                .padding(.top, -6)
+                .padding(.trailing, -10)
             }
 
             SetHeader()
@@ -139,12 +166,25 @@ struct ExerciseBlock: View {
                     }
                     .buttonStyle(BlockButtonStyle(outline: true, small: true))
                 }
+                Button("Byt") {
+                    hideKeyboard()
+                    present(.swap(e.id, inSession: true))
+                }
+                .buttonStyle(BlockButtonStyle(outline: true, small: true))
             }
             .padding(.top, 12)
         }
         .padding(.vertical, 18)
         .overlay(alignment: .top) { Rectangle().fill(T.hair).frame(height: 1) }
         .padding(.top, 18)
+        .confirmationDialog("Fjern \(store.name(e.id))?", isPresented: $confirmRemove, titleVisibility: .visible) {
+            Button("Fjern øvelsen", role: .destructive) {
+                withAnimation(.easeOut(duration: 0.18)) { store.removeFromSession(i) }
+            }
+            Button("Annuller", role: .cancel) {}
+        } message: {
+            Text("Det, du har logget på øvelsen i dag, bliver ikke gemt.")
+        }
     }
 
     private func targetText(_ x: ExerciseDef) -> String {
@@ -168,7 +208,7 @@ private enum Col {
 }
 
 struct SetHeader: View {
-    @Environment(\.showInfo) private var showInfo
+    @Environment(\.present) private var present
 
     var body: some View {
         HStack(spacing: Col.gap) {
@@ -176,7 +216,7 @@ struct SetHeader: View {
             headerText("kg")
             headerText("gentagelser")
             Button {
-                showInfo(.rir)
+                present(.rir)
             } label: {
                 HStack(spacing: 2) {
                     Text("i tanken")
