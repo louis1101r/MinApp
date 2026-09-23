@@ -76,7 +76,7 @@ final class RestTimer {
         }
     }
 
-    /// Pausen er slut: notifikationen får lov at komme (lyd + banner), resten ryddes.
+    /// Pausen er slut: appen vibrerer, notifikationen får lov at komme, resten ryddes.
     private func complete() {
         stop(removeNotification: false)
         Self.vibrate()
