@@ -1,0 +1,16 @@
+# XcodeGen-genereret projekt
+*.xcodeproj/
+*.xcworkspace/
+
+# Byg-output
+build/
+DerivedData/
+Payload/
+*.ipa
+
+# Xcode
+xcuserdata/
+*.xcuserstate
+
+# macOS
+.DS_Store
