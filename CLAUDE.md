@@ -11,6 +11,7 @@
 - GitHub Actions (.github/workflows/build.yml) bygger på runner macos-26 med Xcode 26.6, uden code signing, og uploader MinApp.ipa som artifact.
 - Repo: github.com/louis1101r/MinApp (offentligt, main-branch).
 - Arbejdsgang: ret kode → commit → push → gh run watch → ved fejl: gh run view --log-failed, ret og push igen, indtil grønt.
+- Ren logik (MinApp/Catalog*.swift, Values.swift, Logic.swift, Backup.swift) har kun Foundation og kan testes lokalt: `tools/logic-tests/run.sh` (progression, migrate v2/v3/v4, 3.000-træningers ydelse, og at webappen kan læse en v4-backup). Kør den før push, når logikken ændres.
 
 ## Installation på iPhone
 - iPhone kører iOS 26.6.2.
@@ -31,6 +32,7 @@
 - `docs/webapp.html`: den oprindelige webapp. Sandheden for datamodel, øvelser og progressionslogik.
 - `docs/traeningsapp-kontekst.md`: beskrivelse af webappen. Afsnit 8 er forældet (ingen Xcode/simulator); opsætningen i denne fil gælder.
 - `MinApp/Catalog+Builtin.swift` er genereret fra `docs/webapp.html` og skal ikke rettes i hånden.
+- Datamodel v4: to profiler (Louis og makker). Backupformatet er webappens v3 for Louis + feltet `buddy`. Ændres formatet, skal `Backup.parse` udvides og testene opdateres.
 
 ## Kommunikation
 - Svar på dansk, kort og direkte.
