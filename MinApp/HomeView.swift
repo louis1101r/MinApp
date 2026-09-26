@@ -6,60 +6,71 @@ struct HomeView: View {
     @State private var popped: String?
 
     var body: some View {
-        let rec = store.recommend()
-        let last = store.lastTrained()
-
         VStack(alignment: .leading, spacing: 0) {
-            if store.showDeload {
-                deloadBanner
-                    .padding(.bottom, 18)
-            }
-
-            if rec.groups.isEmpty {
-                Text("Ingen øvelser")
-                    .displayStyle(30)
-                Text("Tilføj øvelser til dine muskelgrupper under Program.")
+            if !store.isLoaded {
+                Text("Indlæser dine træninger…")
                     .leadStyle()
-                    .padding(.top, 8)
             } else {
-                recommended(rec.groups, last: rec.last)
-                readinessSection
-                pickSection(last: last)
-                if let l = store.log.last {
-                    Sec {
-                        SectionTitle(text: "Sidste træning")
-                        HStack(alignment: .firstTextBaseline, spacing: 10) {
-                            Text(l.name)
-                                .font(.system(size: 15))
-                            Spacer()
-                            Text(l.date + " · " + store.agoTxt(l.ts))
-                                .font(.system(size: 13))
-                                .monospacedDigit()
-                                .foregroundStyle(T.muted)
-                        }
-                        .padding(.vertical, 13)
-                        .overlay(alignment: .bottom) { Rectangle().fill(T.hair).frame(height: 1) }
-                    }
-                }
+                content
             }
         }
         .foregroundStyle(T.ink)
         .padding(.top, 22)
     }
 
+    @ViewBuilder
+    private var content: some View {
+        let rec = store.recommend()
+        let last = store.lastTrained(.louis)
+
+        ForEach(Profile.allCases.filter { store.showDeload($0) }, id: \.self) { p in
+            deloadBanner(p)
+                .padding(.bottom, 18)
+        }
+
+        if rec.groups.isEmpty {
+            Text("Ingen øvelser")
+                .displayStyle(30)
+            Text("Tilføj øvelser til dine muskelgrupper under Program.")
+                .leadStyle()
+                .padding(.top, 8)
+        } else {
+            recommended(rec.groups, last: rec.last)
+            readinessSection
+            pickSection(last: last)
+            if let l = store.ix(.louis).summaries.last {
+                Sec {
+                    SectionTitle(text: "Sidste træning")
+                    HStack(alignment: .firstTextBaseline, spacing: 10) {
+                        Text(l.name)
+                            .font(.system(size: 15))
+                        Spacer()
+                        Text(l.date + " · " + store.agoTxt(l.ts))
+                            .font(.system(size: 13))
+                            .monospacedDigit()
+                            .foregroundStyle(T.muted)
+                    }
+                    .padding(.vertical, 13)
+                    .overlay(alignment: .bottom) { Rectangle().fill(T.hair).frame(height: 1) }
+                }
+            }
+        }
+    }
+
     // MARK: - dele
 
-    private var deloadBanner: some View {
-        let n = store.stalled()
+    private func deloadBanner(_ p: Profile) -> some View {
+        let n = store.stalled(p)
         return VStack(alignment: .leading, spacing: 0) {
             // Tekst med "%" sendes som String-argument, så den ikke tolkes som formatkode.
+            let who = p == .louis ? "" : " (" + store.name(of: p) + ")"
             let reason = n >= 3 ? "\(n) øvelser er gået i stå." : "Seks ugers ophobet træthed."
             let tail: String = reason + " Tag tre træninger med 30 % lavere vægt, eller sænk udgangspunktet permanent."
-            let label: String = "Sænk alle vægte 10 % og nulstil"
-            Text("\(Text("⚠ Kør en let uge.").bold()) \(tail)")
+            let label: String = "Sænk alle vægte 10 % og nulstil" + who
+            Text("\(Text("⚠ Kør en let uge" + who + ".").bold()) \(tail)")
                 .font(.system(size: 14))
             Button(label) {
-                store.doDeload()
+                store.doDeload(p)
             }
             .buttonStyle(TextLinkStyle())
         }
@@ -90,13 +101,31 @@ struct HomeView: View {
             Text("Skalerer dagens vægt. Vær ærlig, ikke ambitiøs.")
                 .smallMuted()
                 .padding(.bottom, 2)
-            ReadinessPicker(value: Binding(get: { store.readiness }, set: { store.readiness = $0 }))
-            Button("Start anbefalet træning") {
+            SegmentPicker(
+                items: [(false, "Træn alene"), (true, "Træn sammen")],
+                value: Binding(get: { store.together }, set: { v in withAnimation(.easeOut(duration: 0.18)) { store.together = v } })
+            )
+            .padding(.bottom, 4)
+            if store.together {
+                Text("Louis").smallMuted()
+            }
+            ReadinessPicker(value: readinessBinding(.louis))
+            if store.together {
+                Text(store.name(of: .buddy)).smallMuted()
+                    .padding(.top, 4)
+                ReadinessPicker(value: readinessBinding(.buddy))
+                    .transition(.opacity)
+            }
+            Button(store.together ? "Start anbefalet træning sammen" : "Start anbefalet træning") {
                 withAnimation(.easeOut(duration: 0.18)) { store.startRec() }
             }
             .buttonStyle(BlockButtonStyle())
             .padding(.top, 4)
         }
+    }
+
+    private func readinessBinding(_ p: Profile) -> Binding<Int> {
+        Binding(get: { store.readiness[p] ?? 3 }, set: { store.readiness[p] = $0 })
     }
 
     private func pickSection(last: [String: Double]) -> some View {
@@ -152,7 +181,7 @@ struct HomeView: View {
                 Text("\(Text(title).bold().foregroundColor(T.ink)) · \(ids.count) øvelser · \(store.setsFor(ids)) sæt")
                     .leadStyle()
                     .padding(.top, 6)
-                Button("Start valgt træning") {
+                Button(store.together ? "Start valgt træning sammen" : "Start valgt træning") {
                     withAnimation(.easeOut(duration: 0.18)) { store.startPicked() }
                 }
                 .buttonStyle(BlockButtonStyle())
@@ -189,6 +218,38 @@ struct HomeView: View {
             }
             .padding(.top, 6)
         }
+    }
+}
+
+/// .pick med vilkårlige værdier (fx Træn alene / Træn sammen, Louis / makker).
+struct SegmentPicker<V: Hashable>: View {
+    let items: [(V, String)]
+    @Binding var value: V
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(Array(items.enumerated()), id: \.offset) { idx, item in
+                let on = value == item.0
+                Button {
+                    value = item.0
+                } label: {
+                    Text(item.1)
+                        .font(.system(size: 14, weight: .semibold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .foregroundStyle(on ? T.onInk : T.ink)
+                        .background(on ? T.ink : Color.clear)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(PressScaleStyle())
+                if idx < items.count - 1 {
+                    Rectangle().fill(T.ink).frame(width: 1)
+                }
+            }
+        }
+        .fixedSize(horizontal: false, vertical: true)
+        .overlay(Rectangle().strokeBorder(T.ink, lineWidth: 2))
     }
 }
 

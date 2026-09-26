@@ -33,6 +33,9 @@ targets:
         UILaunchScreen: {}
         UIRequiresFullScreen: true
         NSSupportsLiveActivities: true
+        # Dokumenter-mappen (backups) vises i Filer under "På min iPhone → MinApp"
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: true
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
         # Genvej: minapp://?w=72,5 sætter vægten i næste sæt (webappens ?w=)

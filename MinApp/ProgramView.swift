@@ -12,6 +12,8 @@ struct ProgramView: View {
     @State private var confirmWipe = false
     @State private var showFileImporter = false
     @State private var shareFile: ShareFile?
+    @State private var buddyName = ""
+    @State private var busy = false
 
     var body: some View {
         let last = store.lastTrained()
@@ -25,6 +27,19 @@ struct ProgramView: View {
 
             ForEach(Catalog.tg, id: \.self) { g in
                 groupSection(g, last: last)
+            }
+
+            Sec {
+                SectionTitle(text: "Træningsmakker")
+                Text("Navnet bruges, når I træner sammen. Makkerens vægte, log og grafer holdes adskilt fra dine.")
+                    .smallMuted()
+                TextField("", text: $buddyName, prompt: Text("Makker").foregroundColor(Color(white: 0.69)))
+                    .font(.system(size: 16, weight: .semibold))
+                    .padding(12)
+                    .background(T.wash)
+                    .overlay(Rectangle().strokeBorder(T.hair, lineWidth: 1))
+                    .onSubmit { store.setBuddyName(buddyName) }
+                    .onChange(of: buddyName) { _, v in store.setBuddyName(v) }
             }
 
             Sec {
@@ -82,6 +97,7 @@ struct ProgramView: View {
         .onAppear {
             incU = fmtInput(store.settings.incU)
             incL = fmtInput(store.settings.incL)
+            buddyName = store.settings.buddyName
         }
         .confirmationDialog(
             "Gendan backup?",
@@ -89,11 +105,17 @@ struct ProgramView: View {
             titleVisibility: .visible,
             presenting: pendingImport
         ) { b in
-            Button("Overskriv og gendan", role: .destructive) {
-                store.applyBackup(b)
-                incU = fmtInput(store.settings.incU)
-                incL = fmtInput(store.settings.incL)
-                pendingImport = nil
+            if b.buddy == nil {
+                Button("Gendan og behold \(store.name(of: .buddy))s data", role: .destructive) {
+                    restore(b, keepBuddy: true)
+                }
+                Button("Gendan og slet \(store.name(of: .buddy))s data", role: .destructive) {
+                    restore(b, keepBuddy: false)
+                }
+            } else {
+                Button("Overskriv og gendan", role: .destructive) {
+                    restore(b, keepBuddy: false)
+                }
             }
             Button("Annuller", role: .cancel) { pendingImport = nil }
         } message: { b in
@@ -102,12 +124,11 @@ struct ProgramView: View {
         .confirmationDialog("Slet alt?", isPresented: $confirmWipe, titleVisibility: .visible) {
             Button("Slet alt", role: .destructive) {
                 store.wipe()
-                incU = fmtInput(store.settings.incU)
-                incL = fmtInput(store.settings.incL)
+                refreshFields()
             }
             Button("Annuller", role: .cancel) {}
         } message: {
-            Text("Alle træninger, vægte og øvelser, du har tilføjet, forsvinder permanent. Det kan ikke fortrydes.")
+            Text("Alle træninger, vægte og øvelser, du har tilføjet, forsvinder permanent – også makkerens. Det kan ikke fortrydes.")
         }
         .fileImporter(isPresented: $showFileImporter, allowedContentTypes: [.json, .plainText, .data]) { result in
             guard case .success(let url) = result else { return }
@@ -157,6 +178,9 @@ struct ProgramView: View {
         let w = store.stW(id)
         var weight = " · ingen vægt endnu"
         if let w, w != 0 { weight = " · " + fmt(w) + " kg" }
+        if let bw = store.stW(id, .buddy), bw != 0 {
+            weight += " · " + store.name(of: .buddy) + " " + fmt(bw) + " kg"
+        }
         let meta: String = "\(store.stSets(id)) × \(x?.lo ?? 0)–\(x?.hi ?? 0)" + weight
         return HStack(spacing: 0) {
             Button {
@@ -208,12 +232,15 @@ struct ProgramView: View {
     private var dataSection: some View {
         Sec {
             SectionTitle(text: "Data")
-            Text("Backuppen har samme format som webappens \"Kopiér backup\", så den kan gendannes begge steder.")
+            Text("Backuppen har samme format som webappens \"Kopiér backup\" (med makkeren som ekstra felt), så den kan gendannes begge steder. Automatiske backups ligger i Filer under På min iPhone → MinApp.")
                 .smallMuted()
             HStack(spacing: 10) {
                 Button("Kopiér backup") {
-                    UIPasteboard.general.string = String(decoding: store.exportData(), as: UTF8.self)
-                    store.toast("Kopieret til udklipsholder.")
+                    run {
+                        let data = await store.exportData()
+                        UIPasteboard.general.string = String(decoding: data, as: UTF8.self)
+                        store.toast("Kopieret til udklipsholder.")
+                    }
                 }
                 .buttonStyle(BlockButtonStyle(outline: true, small: true))
                 Button("Indsæt backup") {
@@ -231,34 +258,72 @@ struct ProgramView: View {
                 Button("Hent fra fil") { showFileImporter = true }
                     .buttonStyle(BlockButtonStyle(outline: true, small: true))
             }
+            .disabled(busy)
             Button("Slet alt") { confirmWipe = true }
                 .buttonStyle(TextLinkStyle(color: T.red))
         }
+        .disabled(busy || !store.isLoaded)
+        .opacity(busy ? 0.6 : 1)
+    }
+
+    /// Kører tung backup-kode uden at fryse skærmen.
+    private func run(_ work: @escaping @MainActor () async -> Void) {
+        busy = true
+        Task {
+            await work()
+            busy = false
+        }
+    }
+
+    private func refreshFields() {
+        incU = fmtInput(store.settings.incU)
+        incL = fmtInput(store.settings.incL)
+        buddyName = store.settings.buddyName
+    }
+
+    private func restore(_ b: BackupData, keepBuddy: Bool) {
+        store.applyBackup(b, keepBuddy: keepBuddy)
+        refreshFields()
+        pendingImport = nil
     }
 
     private func readBackup(_ data: Data) {
-        do {
-            pendingImport = try Backup.parse(data)
-        } catch {
-            store.toast("Kunne ikke læse denne backup. Tjek at du har indsat det hele.")
+        run {
+            let parsed = await Task.detached(priority: .userInitiated) { try? Backup.parse(data) }.value
+            if let parsed {
+                pendingImport = parsed
+            } else {
+                store.toast("Kunne ikke læse denne backup. Tjek at du har indsat det hele.")
+            }
         }
     }
 
     private func importSummary(_ b: BackupData) -> String {
         let custom = b.customEx.isEmpty ? "" : " og \(b.customEx.count) egne øvelser"
-        return "Backuppen indeholder \(b.log.count) træninger, \(b.ex.count) øvelser med vægte\(custom). Dine nuværende data bliver overskrevet."
+        var text = "Louis: \(b.louis.log.count) træninger, \(b.louis.ex.count) øvelser med vægte\(custom)."
+        if let buddy = b.buddy {
+            text += " \(buddy.name): \(buddy.log.count) træninger, \(buddy.ex.count) øvelser med vægte."
+            text += " Alle nuværende data bliver overskrevet."
+        } else {
+            text += " Det er en backup fra før makker, så den erstatter Louis' data. Vælg, om \(store.name(of: .buddy))s data skal beholdes."
+        }
+        return text
     }
 
     private func exportFile() {
-        let f = DateFormatter()
-        f.dateFormat = "yyyy-MM-dd"
-        let name = "traeningsregistrering-backup-\(f.string(from: Date())).json"
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent(name)
-        do {
-            try store.exportData().write(to: url, options: .atomic)
-            shareFile = ShareFile(url: url)
-        } catch {
-            store.toast("Kunne ikke lave backupfilen.")
+        run {
+            let f = DateFormatter()
+            f.locale = Locale(identifier: "en_US_POSIX")
+            f.dateFormat = "yyyy-MM-dd"
+            let name = "traeningsregistrering-backup-\(f.string(from: Date())).json"
+            let url = FileManager.default.temporaryDirectory.appendingPathComponent(name)
+            let data = await store.exportData()
+            do {
+                try data.write(to: url, options: .atomic)
+                shareFile = ShareFile(url: url)
+            } catch {
+                store.toast("Kunne ikke lave backupfilen.")
+            }
         }
     }
 }

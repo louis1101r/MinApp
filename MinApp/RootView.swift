@@ -28,7 +28,7 @@ struct RootView: View {
                 content
                     .frame(maxWidth: T.maxWidth)
                     .padding(.horizontal, 18)
-                    .padding(.bottom, store.timer.isRunning ? 90 : 30)
+                    .padding(.bottom, store.timers.anyRunning ? CGFloat(40 + 50 * store.timers.running.count) : 30)
                     .frame(maxWidth: .infinity)
             }
             .scrollDismissesKeyboard(.interactively)
@@ -39,11 +39,11 @@ struct RootView: View {
         }
         .background(T.bg.ignoresSafeArea())
         .onAppear {
-            RestTimer.requestNotificationPermission()
-            store.timer.checkExpired()
+            RestTimers.requestNotificationPermission()
+            store.appDidBecomeActive()
         }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active { store.timer.checkExpired() }
+            if phase == .active { store.appDidBecomeActive() }
         }
         .sheet(item: $route) { r in
             RouteSheet(route: r)
@@ -65,14 +65,14 @@ struct RootView: View {
                     .padding(.horizontal, 24)
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
-            if store.timer.isRunning {
-                TimerPill()
+            ForEach(store.timers.runningProfiles, id: \.self) { p in
+                TimerPill(profile: p)
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
         }
         .padding(.bottom, 12)
         .animation(.easeOut(duration: 0.22), value: store.toastMessage)
-        .animation(.easeOut(duration: 0.22), value: store.timer.isRunning)
+        .animation(.easeOut(duration: 0.22), value: store.timers.runningProfiles)
     }
 
     private var header: some View {
@@ -81,7 +81,7 @@ struct RootView: View {
                 .font(.system(size: 15, weight: .heavy))
                 .tracking(-0.3)
             Spacer()
-            Text("\(store.log.count) træninger")
+            Text(store.isLoaded ? "\(store.logCount(.louis)) træninger" : "Indlæser…")
                 .font(.system(size: 12))
                 .monospacedDigit()
                 .foregroundStyle(T.muted)
@@ -101,7 +101,7 @@ struct RootView: View {
     private var screenKey: String {
         switch store.tab {
         case .home:
-            return store.adjustments != nil ? "finish" : (store.active != nil ? "session" : "home")
+            return store.finishGroups != nil ? "finish" : (store.active != nil ? "session" : "home")
         case .hist:
             return "hist"
         case .set:
@@ -113,8 +113,8 @@ struct RootView: View {
     private var content: some View {
         switch store.tab {
         case .home:
-            if let adj = store.adjustments {
-                FinishView(adjustments: adj)
+            if let groups = store.finishGroups {
+                FinishView(groups: groups)
             } else if store.active != nil {
                 SessionView()
             } else {
@@ -153,7 +153,7 @@ struct NavBar: View {
             hideKeyboard()
             withAnimation(.easeOut(duration: 0.18)) {
                 // go(t): slutskærmen forsvinder, når man skifter fane.
-                store.adjustments = nil
+                store.finishGroups = nil
                 store.tab = t
             }
         } label: {
@@ -291,25 +291,33 @@ struct RouteSheet: View {
 
 // MARK: - Timer
 
-/// .timer .pill: −15 · 0:00 · +15 · Stop
+/// .timer .pill: −15 · 0:00 · +15 · Stop (én per person, med navn når I træner sammen)
 struct TimerPill: View {
     @Environment(TrainingStore.self) private var store
+    let profile: Profile
 
     var body: some View {
+        let t = store.timers
         HStack(spacing: 14) {
-            Button("−15") { store.timer.adjust(-15) }
+            if t.together {
+                Text(t.displayName(profile))
+                    .font(.system(size: 13, weight: .bold))
+                    .lineLimit(1)
+                    .frame(maxWidth: 70, alignment: .leading)
+            }
+            Button("−15") { t.adjust(profile, -15) }
                 .font(.system(size: 13, weight: .bold))
                 .opacity(0.85)
-            if let start = store.timer.startDate, let end = store.timer.endDate, end > start {
-                Text(timerInterval: start...end, countsDown: true)
+            if let r = t.running[profile], r.end > r.start {
+                Text(timerInterval: r.start...r.end, countsDown: true)
                     .font(.system(size: 16, weight: .bold))
                     .monospacedDigit()
                     .frame(minWidth: 44)
             }
-            Button("+15") { store.timer.adjust(15) }
+            Button("+15") { t.adjust(profile, 15) }
                 .font(.system(size: 13, weight: .bold))
                 .opacity(0.85)
-            Button("Stop") { store.timer.stop() }
+            Button("Stop") { t.stop(profile) }
                 .font(.system(size: 16, weight: .semibold))
                 .opacity(0.8)
         }

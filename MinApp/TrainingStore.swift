@@ -12,14 +12,12 @@ struct Adjustment: Identifiable, Hashable {
     var msg: String
 }
 
-/// En række fra exStats(id).
-struct StatRow: Hashable {
-    var date: String
-    var best: LogSet
-    var e1: Double
-    var top: Double
-    var vol: Double
-    var sets: Int
+/// Slutskærmens justeringer for én person.
+struct FinishGroup: Identifiable, Hashable {
+    var profile: Profile
+    var name: String
+    var items: [Adjustment]
+    var id: String { profile.rawValue }
 }
 
 /// Et sæt i den aktive træning.
@@ -32,40 +30,51 @@ enum Tab: String {
     case home, hist, set
 }
 
-/// Port af webappens logik (afsnit 3–5 i docs/traeningsapp-kontekst.md og docs/webapp.html).
-/// Funktionsnavnene svarer til webappens, så de kan sammenlignes linje for linje.
+/// Port af webappens logik (afsnit 3–5 i docs/traeningsapp-kontekst.md og docs/webapp.html),
+/// udvidet med træningsmakker. Den rene logik ligger i Logic.swift og testes lokalt.
 @MainActor
 @Observable
 final class TrainingStore {
+    private let container: ModelContainer
     private let context: ModelContext
     private(set) var settings: AppSettings
-    private var progress: [String: ExerciseProgress] = [:]
-    /// D.log i rækkefølge.
-    private(set) var log: [LogRecord] = []
+    private var progress: [Profile: [String: ProfileProgress]] = [.louis: [:], .buddy: [:]]
+    /// D.log per profil (fuld, til backup). Indlæses i baggrunden.
+    private var logs: [Profile: [LogRecord]] = [.louis: [], .buddy: []]
+    /// Cache over loggen per profil.
+    private(set) var index: [Profile: ProfileIndex] = [.louis: ProfileIndex(), .buddy: ProfileIndex()]
+    private(set) var isLoaded = false
     private var customEx: [String: ExerciseDef] = [:]
 
-    /// D.groups og D.favs, spejlet fra settings.
+    /// D.groups og D.favs (fælles).
     private(set) var groups: [String: [String]] = [:]
     private(set) var favs: [[String]] = []
 
     private(set) var active: ActiveSession?
     var tab: Tab = .home
-    var readiness = 3
+    /// Dagsform per person på forsiden.
+    var readiness: [Profile: Int] = [.louis: 3, .buddy: 3]
+    /// "Træn sammen" valgt på forsiden.
+    var together = false
+    /// Valgt profil i Udvikling.
+    var histProfile: Profile = .louis
     private(set) var picked: [String] = []
     /// Slutskærmen efter finish(). nil = ingen.
-    var adjustments: [Adjustment]?
+    var finishGroups: [FinishGroup]?
     private(set) var toastMessage: String?
     private var toastTask: Task<Void, Never>?
-    /// Det sæt, Live Activity viser som det næste ("Sæt færdigt").
-    @ObservationIgnored private var nextRef: SetRef?
+    /// Det sæt per person, Live Activity viser som det næste ("Sæt færdigt").
+    @ObservationIgnored private var nextRef: [Profile: SetRef] = [:]
 
-    let timer = RestTimer()
+    let timers = RestTimers()
 
-    private static let activeKey = "treg_active"
+    private static let activeKey = "treg_active_v2"
+    private static let legacyActiveKey = "treg_active"
     private static let quickKey = "treg_quick_w"
 
-    init(context: ModelContext) {
-        self.context = context
+    init(container: ModelContainer) {
+        self.container = container
+        self.context = container.mainContext
         let existing = (try? context.fetch(FetchDescriptor<AppSettings>())) ?? []
         if let s = existing.first {
             settings = s
@@ -84,12 +93,15 @@ final class TrainingStore {
         for c in (try? context.fetch(FetchDescriptor<CustomExercise>())) ?? [] {
             customEx[c.id] = c.def
         }
-        progress = [:]
-        for p in (try? context.fetch(FetchDescriptor<ExerciseProgress>())) ?? [] {
-            progress[p.id] = p
+
+        if settings.v < 4 {
+            migrateToV4()
         }
-        let byTs = FetchDescriptor<WorkoutLog>(sortBy: [SortDescriptor(\WorkoutLog.ts)])
-        log = ((try? context.fetch(byTs)) ?? []).map(\.record)
+
+        progress = [.louis: [:], .buddy: [:]]
+        for p in (try? context.fetch(FetchDescriptor<ProfileProgress>())) ?? [] {
+            progress[Profile(rawValue: p.profile) ?? .louis, default: [:]][p.ex] = p
+        }
 
         // migrate(): fjern ukendte id'er fra grupperne og sørg for, at alle grupper findes.
         var g = settings.groups
@@ -97,18 +109,53 @@ final class TrainingStore {
             g[t] = (g[t] ?? []).filter { EX($0) != nil }
         }
         settings.setGroups(g)
-        settings.v = 3
         groups = g
         favs = settings.favs
 
-        if let data = UserDefaults.standard.data(forKey: Self.activeKey),
-           var a = try? JSONDecoder().decode(ActiveSession.self, from: data) {
-            a.ex = a.ex.filter { EX($0.id) != nil }
-            active = a
-        } else {
-            active = nil
-        }
+        loadActive()
         save()
+        loadLogsInBackground()
+    }
+
+    /// v3 → v4: gem en kopi af alle data, flyt Louis' progression til den nye tabel.
+    /// (Loggen har fået feltet profile = "louis" af SwiftData ved åbningen.)
+    private func migrateToV4() {
+        let old = (try? context.fetch(FetchDescriptor<ExerciseProgress>())) ?? []
+        var ex: [String: ProgressValues] = [:]
+        for o in old {
+            ex[o.id] = ProgressValues(w: o.w, sets: o.sets, stall: o.stall, wins: o.wins)
+        }
+        let byTs = FetchDescriptor<WorkoutLog>(sortBy: [SortDescriptor(\WorkoutLog.ts)])
+        let log = ((try? context.fetch(byTs)) ?? []).map(\.record)
+        let before = BackupData(
+            sourceVersion: 3,
+            groups: settings.groups,
+            incU: settings.incU,
+            incL: settings.incL,
+            customEx: customEx.values.sorted { $0.id < $1.id },
+            favs: settings.favs,
+            louis: ProfileData(name: "Louis", ex: ex, log: log, deload: settings.deload),
+            buddy: nil
+        )
+        BackupFiles.writeOnce(Backup.serialize(before, version: 3), name: BackupFiles.preMigrationName)
+
+        for (id, v) in ex {
+            context.insert(ProfileProgress(profile: .louis, ex: id, values: v))
+        }
+        for o in old { context.delete(o) }
+        settings.v = 4
+        save()
+    }
+
+    private func loadLogsInBackground() {
+        let loader = LogLoader(modelContainer: container)
+        Task {
+            let result = await loader.load()
+            self.logs = result.logs
+            self.index = result.index
+            self.isLoaded = true
+            self.weeklyBackupIfDue()
+        }
     }
 
     private func save() {
@@ -120,12 +167,51 @@ final class TrainingStore {
         save()
     }
 
+    private func loadActive() {
+        let defaults = UserDefaults.standard
+        if let data = defaults.data(forKey: Self.activeKey),
+           let a = try? JSONDecoder().decode(ActiveSession.self, from: data) {
+            active = a
+        } else if let data = defaults.data(forKey: Self.legacyActiveKey),
+                  let old = try? JSONDecoder().decode(LegacyActiveSession.self, from: data) {
+            active = old.converted
+        } else {
+            active = nil
+        }
+        defaults.removeObject(forKey: Self.legacyActiveKey)
+        if var a = active {
+            a.ex = a.ex.filter { EX($0.id) != nil }
+            active = a
+        }
+        saveActive()
+    }
+
     private func saveActive() {
         if let active, let data = try? JSONEncoder().encode(active) {
             UserDefaults.standard.set(data, forKey: Self.activeKey)
         } else {
             UserDefaults.standard.removeObject(forKey: Self.activeKey)
         }
+    }
+
+    // MARK: - profiler
+
+    func name(of p: Profile) -> String {
+        p == .louis ? "Louis" : settings.buddyName
+    }
+
+    func setBuddyName(_ s: String) {
+        let t = s.trimmingCharacters(in: .whitespacesAndNewlines)
+        settings.buddyName = t.isEmpty ? "Makker" : String(t.prefix(30))
+        save()
+    }
+
+    func logCount(_ p: Profile) -> Int {
+        index[p]?.count ?? 0
+    }
+
+    func ix(_ p: Profile) -> ProfileIndex {
+        index[p] ?? ProfileIndex()
     }
 
     // MARK: - øvelser
@@ -146,25 +232,25 @@ final class TrainingStore {
 
     /// st(id): opretter progression for øvelsen, hvis den mangler.
     @discardableResult
-    func st(_ id: String) -> ExerciseProgress {
-        if let p = progress[id] { return p }
-        let p = ExerciseProgress(id: id, w: nil, sets: EX(id)?.s ?? 3)
-        context.insert(p)
-        progress[id] = p
-        return p
+    private func st(_ p: Profile, _ id: String) -> ProfileProgress {
+        if let s = progress[p]?[id] { return s }
+        let s = ProfileProgress(profile: p, ex: id, values: ProgressValues(w: nil, sets: EX(id)?.s ?? 3, stall: 0, wins: 0))
+        context.insert(s)
+        progress[p, default: [:]][id] = s
+        return s
     }
 
-    /// Antal sæt uden at oprette en progression (webappen opretter den blot i hukommelsen).
-    func stSets(_ id: String) -> Int {
-        progress[id]?.sets ?? EX(id)?.s ?? 0
+    /// Antal sæt uden at oprette en progression.
+    func stSets(_ id: String, _ p: Profile = .louis) -> Int {
+        progress[p]?[id]?.sets ?? EX(id)?.s ?? 0
     }
 
-    func stW(_ id: String) -> Double? {
-        progress[id]?.w
+    func stW(_ id: String, _ p: Profile = .louis) -> Double? {
+        progress[p]?[id]?.w
     }
 
-    func stall(_ id: String) -> Int {
-        progress[id]?.stall ?? 0
+    func stall(_ id: String, _ p: Profile = .louis) -> Int {
+        progress[p]?[id]?.stall ?? 0
     }
 
     func inc(_ id: String) -> Double {
@@ -173,30 +259,25 @@ final class TrainingStore {
 
     // MARK: - muskelgrupper
 
+    private var exLookup: ExLookup {
+        let builtin = Catalog.builtin
+        let custom = customEx
+        return { builtin[$0] ?? custom[$0] }
+    }
+
     func tgOf(_ id: String) -> String {
-        let m = EX(id)?.m ?? ""
-        return Catalog.tgMap[m] ?? m
+        Logic.tgOf(id, exLookup)
     }
 
     func sortGroups(_ gs: [String]) -> [String] {
-        gs.sorted { orderIndex($0) < orderIndex($1) }
-    }
-
-    private func orderIndex(_ g: String) -> Int {
-        Catalog.sessionOrder.firstIndex(of: g) ?? -1
+        Logic.sortGroups(gs)
     }
 
     /// byGroupOrder: sortering efter TG (stabil, som Array.sort i JS).
     func byGroupOrder(_ ids: [String]) -> [String] {
-        stableSorted(ids) { tgIndex(tgOf($0)) }
-    }
-
-    private func tgIndex(_ g: String) -> Int {
-        Catalog.tg.firstIndex(of: g) ?? -1
-    }
-
-    private func stableSorted(_ ids: [String], key: (String) -> Int) -> [String] {
-        ids.enumerated()
+        let look = exLookup
+        func key(_ id: String) -> Int { Catalog.tg.firstIndex(of: Logic.tgOf(id, look)) ?? -1 }
+        return ids.enumerated()
             .sorted { a, b in
                 let ka = key(a.element), kb = key(b.element)
                 return ka != kb ? ka < kb : a.offset < b.offset
@@ -205,22 +286,11 @@ final class TrainingStore {
     }
 
     func groupsOfIds(_ ids: [String]) -> [String] {
-        var gs: [String] = []
-        for id in ids where EX(id) != nil {
-            let g = tgOf(id)
-            if !gs.contains(g) { gs.append(g) }
-        }
-        return sortGroups(gs)
+        Logic.groupsOfIds(ids, exLookup)
     }
 
-    func lastTrained() -> [String: Double] {
-        var m: [String: Double] = [:]
-        for l in log {
-            for g in l.groups {
-                if m[g] == nil || l.ts > m[g]! { m[g] = l.ts }
-            }
-        }
-        return m
+    func lastTrained(_ p: Profile = .louis) -> [String: Double] {
+        ix(p).lastTrained
     }
 
     func groupList(_ g: String) -> [String] {
@@ -252,8 +322,9 @@ final class TrainingStore {
         ids.reduce(0) { $0 + stSets($1) }
     }
 
+    /// Anbefalingen bygger altid på Louis.
     func recommend() -> (groups: [String], last: Double) {
-        let last = lastTrained()
+        let last = lastTrained(.louis)
         let now = nowMs()
         var best: [String]?
         var score = -1.0
@@ -302,12 +373,12 @@ final class TrainingStore {
 
     // MARK: - forside
 
-    func stalled() -> Int {
-        progress.values.filter { $0.stall >= 1 }.count
+    func stalled(_ p: Profile) -> Int {
+        (progress[p] ?? [:]).values.filter { $0.stall >= 1 }.count
     }
 
-    var showDeload: Bool {
-        log.count - settings.deload >= 18 || stalled() >= 3
+    func showDeload(_ p: Profile) -> Bool {
+        logCount(p) - settings.deload(p) >= 18 || stalled(p) >= 3
     }
 
     func togglePick(_ g: String) {
@@ -349,11 +420,13 @@ final class TrainingStore {
 
     // MARK: - start af træning
 
-    func makeSessionEx(_ id: String, _ rd: Int) -> ActiveExercise {
-        let s = st(id)
-        let n = max(2, s.sets - (rd == 1 ? 1 : 0))
-        let target = s.w.map { rnd($0 * Catalog.readyMult(rd), inc(id) / 2) }
-        return ActiveExercise(id: id, target: target, sets: Array(repeating: ActiveSet(), count: n))
+    /// makeSessionEx(id): en del per person med egen målvægt fra egen progression.
+    private func makeSessionEx(_ id: String, _ a: ActiveSession) -> ActiveExercise {
+        var e = ActiveExercise(id: id, people: [:])
+        for p in a.profiles {
+            e[p] = Logic.sessionPerson(st(p, id).values, readiness: a.readiness(p), inc: inc(id))
+        }
+        return e
     }
 
     func start(_ gs: [String]) {
@@ -362,16 +435,17 @@ final class TrainingStore {
             toast("Der er ingen øvelser i de valgte muskelgrupper.")
             return
         }
-        var a = ActiveSession(
-            name: gs.joined(separator: " + "),
-            groups: gs,
-            readiness: readiness,
-            ex: ids.map { makeSessionEx($0, readiness) }
-        )
-        if let pending = consumePendingQuick(), !a.ex.isEmpty, !a.ex[0].sets.isEmpty {
-            a.ex[0].sets[0].w = fmt(pending)
+        let profiles: [Profile] = together ? [.louis, .buddy] : [.louis]
+        var rd: [String: Int] = [:]
+        for p in profiles { rd[p.rawValue] = readiness[p] ?? 3 }
+        var a = ActiveSession(name: gs.joined(separator: " + "), groups: gs, profiles: profiles, readiness: rd, ex: [])
+        a.ex = ids.map { makeSessionEx($0, a) }
+        if let pending = consumePendingQuick(), !a.ex.isEmpty, var louis = a.ex[0][.louis], !louis.sets.isEmpty {
+            louis.sets[0].w = fmt(pending)
+            a.ex[0][.louis] = louis
         }
         active = a
+        nextRef = [:]
         saveActive()
         save()
     }
@@ -389,57 +463,73 @@ final class TrainingStore {
 
     // MARK: - under træning
 
-    func setVal(_ i: Int, _ j: Int, _ k: WritableKeyPath<ActiveSet, String>, _ v: String) {
-        guard var a = active, a.ex.indices.contains(i), a.ex[i].sets.indices.contains(j) else { return }
-        a.ex[i].sets[j][keyPath: k] = v
+    func value(_ i: Int, _ p: Profile, _ j: Int, _ k: KeyPath<ActiveSet, String>) -> String {
+        guard let a = active, a.ex.indices.contains(i), let person = a.ex[i][p],
+              person.sets.indices.contains(j) else { return "" }
+        return person.sets[j][keyPath: k]
+    }
+
+    func setVal(_ i: Int, _ p: Profile, _ j: Int, _ k: WritableKeyPath<ActiveSet, String>, _ v: String) {
+        guard var a = active, a.ex.indices.contains(i), var person = a.ex[i][p],
+              person.sets.indices.contains(j) else { return }
+        person.sets[j][keyPath: k] = v
+        a.ex[i][p] = person
         active = a
         saveActive()
     }
 
-    func tick(_ i: Int, _ j: Int) {
-        guard var a = active, a.ex.indices.contains(i), a.ex[i].sets.indices.contains(j) else { return }
-        let e = a.ex[i]
-        var s = e.sets[j]
-        let x = EX(e.id)
+    /// tick(i, j) for én person.
+    func tick(_ i: Int, _ p: Profile, _ j: Int) {
+        guard var a = active, a.ex.indices.contains(i), var person = a.ex[i][p],
+              person.sets.indices.contains(j) else { return }
+        let id = a.ex[i].id
+        let x = EX(id)
+        var s = person.sets[j]
         if !s.done {
-            if s.w.isEmpty, let t = e.target { s.w = fmt(t) }
+            if s.w.isEmpty, let t = person.target { s.w = fmt(t) }
             if s.r.isEmpty && !s.w.isEmpty, let x { s.r = String(x.hi) }
             if s.rir.isEmpty { s.rir = "2" }
             s.done = true
-            a.ex[i].sets[j] = s
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            if j + 1 < e.sets.count && a.ex[i].sets[j + 1].w.isEmpty {
-                a.ex[i].sets[j + 1].w = s.w
+            person.sets[j] = s
+            if j + 1 < person.sets.count && person.sets[j + 1].w.isEmpty {
+                person.sets[j + 1].w = s.w
             }
+            a.ex[i][p] = person
             active = a
             saveActive()
-            if let x { rest(x.r, after: SetRef(i: i, j: j)) }
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            let last = s.w.isEmpty ? "" : s.w + " × " + (s.r.isEmpty ? "–" : s.r)
+            if let x { rest(p, x.r, after: SetRef(i: i, j: j), last: last) }
         } else {
-            a.ex[i].sets[j].done = false
+            person.sets[j].done = false
+            a.ex[i][p] = person
             active = a
             saveActive()
         }
     }
 
-    /// "Sæt færdigt" fra Live Activity: markerer det sæt, der vises som det næste.
-    func completeNextSet() {
-        guard let a = active else { return }
-        if let r = nextRef, a.ex.indices.contains(r.i), a.ex[r.i].sets.indices.contains(r.j),
-           !a.ex[r.i].sets[r.j].done {
-            tick(r.i, r.j)
+    /// "Sæt færdigt" fra Live Activity: markerer det sæt, der vises som personens næste.
+    func completeNextSet(_ p: Profile) {
+        guard let a = active, a.profiles.contains(p) else { return }
+        if let r = nextRef[p], a.ex.indices.contains(r.i), let person = a.ex[r.i][p],
+           person.sets.indices.contains(r.j), !person.sets[r.j].done {
+            tick(r.i, p, r.j)
             return
         }
         for (i, e) in a.ex.enumerated() {
-            if let j = e.sets.firstIndex(where: { !$0.done }) {
-                tick(i, j)
+            if let j = e[p]?.sets.firstIndex(where: { !$0.done }) {
+                tick(i, p, j)
                 return
             }
         }
     }
 
+    /// Ekstra sæt: ét til hver person.
     func addSet(_ i: Int) {
         guard var a = active, a.ex.indices.contains(i) else { return }
-        a.ex[i].sets.append(ActiveSet())
+        for p in a.profiles {
+            a.ex[i][p]?.sets.append(ActiveSet())
+        }
         active = a
         saveActive()
     }
@@ -447,7 +537,9 @@ final class TrainingStore {
     /// Om der er logget noget på øvelsen (removeFromSession spørger så først).
     func hasLogged(_ i: Int) -> Bool {
         guard let a = active, a.ex.indices.contains(i) else { return false }
-        return a.ex[i].sets.contains { $0.done || !$0.w.isEmpty || !$0.r.isEmpty }
+        return a.ex[i].people.values.contains { person in
+            person.sets.contains { $0.done || !$0.w.isEmpty || !$0.r.isEmpty }
+        }
     }
 
     func removeFromSession(_ i: Int) {
@@ -455,50 +547,60 @@ final class TrainingStore {
         let id = a.ex[i].id
         a.ex.remove(at: i)
         active = a
+        nextRef = [:]
         saveActive()
         toast(name(id) + " er fjernet fra dagens træning.")
     }
 
     func cancelSession() {
         active = nil
+        nextRef = [:]
         saveActive()
-        timer.stop()
+        timers.stopAll()
     }
 
-    /// Pause-knappen ved en øvelse (uden at et sæt er markeret færdigt).
+    /// Pause-knappen ved en øvelse: starter pausen for alle i træningen.
     func manualRest(_ i: Int) {
         guard let a = active, a.ex.indices.contains(i), let x = EX(a.ex[i].id) else { return }
-        let j = a.ex[i].sets.firstIndex { !$0.done }
-        rest(x.r, after: SetRef(i: i, j: (j ?? a.ex[i].sets.count) - 1))
+        for p in a.profiles {
+            guard let person = a.ex[i][p] else { continue }
+            let j = person.sets.firstIndex { !$0.done }
+            rest(p, x.r, after: SetRef(i: i, j: (j ?? person.sets.count) - 1), last: nil)
+        }
     }
 
-    /// Starter hviletimeren. `after` er det sæt, man lige har taget; teksten viser det næste.
-    private func rest(_ sec: Int, after: SetRef) {
+    /// Starter personens hviletimer. `after` er det sæt, personen lige har taget.
+    private func rest(_ p: Profile, _ sec: Int, after: SetRef, last: String?) {
         guard let a = active else { return }
-        let next = nextSet(a, after: after)
-        nextRef = next?.ref
-        timer.start(
+        let next = nextSet(a, p, after: after)
+        nextRef[p] = next?.ref
+        timers.start(
+            p,
             seconds: sec,
             workout: a.name,
+            people: a.profiles.map { ($0, name(of: $0)) },
             title: next?.title ?? "Sidste sæt er taget",
-            detail: next?.detail ?? "Afslut træningen, når du er klar"
+            detail: next?.detail ?? "Afslut træningen, når du er klar",
+            last: last
         )
     }
 
-    private func nextSet(_ a: ActiveSession, after: SetRef) -> (ref: SetRef, title: String, detail: String)? {
+    private func nextSet(_ a: ActiveSession, _ p: Profile, after: SetRef) -> (ref: SetRef, title: String, detail: String)? {
         var i = after.i
         var j = after.j + 1
         while a.ex.indices.contains(i) {
             let e = a.ex[i]
-            while j < e.sets.count {
-                if !e.sets[j].done {
-                    let s = e.sets[j]
-                    var detail = "Sæt \(j + 1) af \(e.sets.count)"
-                    if let w = num(s.w) ?? e.target { detail += " · \(fmt(w)) kg" }
-                    if let x = EX(e.id) { detail += " · \(x.lo)–\(x.hi)" }
-                    return (SetRef(i: i, j: j), name(e.id), detail)
+            if let person = e[p] {
+                while j < person.sets.count {
+                    if !person.sets[j].done {
+                        let s = person.sets[j]
+                        var detail = "Sæt \(j + 1) af \(person.sets.count)"
+                        if let w = num(s.w) ?? person.target { detail += " · \(fmt(w)) kg" }
+                        if let x = EX(e.id) { detail += " · \(x.lo)–\(x.hi)" }
+                        return (SetRef(i: i, j: j), name(e.id), detail)
+                    }
+                    j += 1
                 }
-                j += 1
             }
             i += 1
             j = 0
@@ -508,86 +610,58 @@ final class TrainingStore {
 
     // MARK: - afslutning og progression
 
+    /// finish(): progressionen køres for hver person for sig, og hver får sin egen logpost.
     func finish() {
-        guard let a = active else { return }
-        var adj: [Adjustment] = []
-        var entries: [LogEntry] = []
-        for e in a.ex {
-            guard let x = EX(e.id) else { continue }
-            let s = st(e.id)
-            let step = inc(e.id)
-            // Kun sæt med vægt og reps > 0. "i tanken" = 2, hvis tom.
-            let sets: [LogSet] = e.sets.compactMap { v in
-                guard let w = num(v.w), let r = num(v.r), r > 0 else { return nil }
-                return LogSet(w: w, r: r, rir: num(v.rir) ?? 2)
+        guard let a = active, isLoaded else { return }
+        var result: [FinishGroup] = []
+        let ts = nowMs()
+        let date = Logic.dateString(Date())
+        for p in a.profiles {
+            var adj: [Adjustment] = []
+            var entries: [LogEntry] = []
+            for e in a.ex {
+                guard let x = EX(e.id), let person = e[p] else { continue }
+                let sets = Logic.loggedSets(person.sets)
+                entries.append(LogEntry(ex: e.id, sets: sets))
+                if sets.isEmpty { continue }
+                let s = st(p, e.id)
+                var v = s.values
+                let old = v.w
+                let msg = Logic.progress(&v, x: x, sets: sets, step: inc(e.id), readiness: a.readiness(p))
+                s.values = v
+                adj.append(Adjustment(n: x.n, from: old, to: v.w ?? 0, msg: msg))
             }
-            entries.append(LogEntry(ex: e.id, sets: sets))
-            if sets.isEmpty { continue }
-            let minR = sets.map(\.r).min()!
-            let top = sets.map(\.w).max()!
-            let lastRir = sets[sets.count - 1].rir
-            let old = s.w
-            let hi = Double(x.hi)
-            let lo = Double(x.lo)
-            var msg = ""
-            if minR >= hi && lastRir >= 3 {
-                s.w = rnd(top + step * 2, step / 2); s.stall = 0; s.wins += 1; msg = "klart over målet"
-            } else if minR >= hi {
-                s.w = rnd(top + step, step / 2); s.stall = 0; s.wins += 1; msg = "alle sæt i toppen"
-            } else if minR >= lo {
-                s.w = top; s.stall = 0; msg = "hold vægten, jagt gentagelser"
-            } else {
-                s.stall += 1
-                if s.stall >= 2 {
-                    s.w = rnd(top * 0.9, step / 2); s.stall = 0; s.wins = 0; s.sets = x.s
-                    msg = "under målet to gange, ned 10 %"
-                } else {
-                    s.w = top; msg = "under målet, samme vægt igen"
-                }
-            }
-            if s.wins >= 3 && s.sets < x.s + 2 && a.readiness >= 4 {
-                s.sets += 1; s.wins = 0; msg += ", plus ét sæt"
-            }
-            adj.append(Adjustment(n: x.n, from: old, to: s.w ?? top, msg: msg))
+            let trained = groupsOfIds(entries.filter { !$0.sets.isEmpty }.map(\.ex))
+            let rec = LogRecord(
+                profile: p,
+                name: a.name,
+                groups: trained.isEmpty ? a.groups : trained,
+                date: date,
+                ts: ts,
+                readiness: a.readiness(p),
+                entries: entries
+            )
+            context.insert(WorkoutLog(rec))
+            logs[p, default: []].append(rec)
+            index[p, default: ProfileIndex()].add(rec)
+            result.append(FinishGroup(profile: p, name: name(of: p), items: adj))
         }
-        let trained = groupsOfIds(entries.filter { !$0.sets.isEmpty }.map(\.ex))
-        let rec = LogRecord(
-            name: a.name,
-            groups: trained.isEmpty ? a.groups : trained,
-            date: Self.dateString(Date()),
-            ts: nowMs(),
-            readiness: a.readiness,
-            entries: entries
-        )
-        insertLog(rec)
-        log.append(rec)
         save()
         active = nil
+        nextRef = [:]
         saveActive()
-        timer.stop()
-        adjustments = adj
+        timers.stopAll()
+        finishGroups = result
     }
 
-    private func insertLog(_ r: LogRecord) {
-        context.insert(WorkoutLog(
-            name: r.name, groups: r.groups, date: r.date, ts: r.ts, readiness: r.readiness, entries: r.entries
-        ))
-    }
-
-    static func dateString(_ d: Date) -> String {
-        let c = Calendar.current.dateComponents([.day, .month, .year], from: d)
-        return String(format: "%02ld.%02ld.%ld", c.day ?? 0, c.month ?? 0, c.year ?? 0)
-    }
-
-    func doDeload() {
-        for (k, s) in progress {
+    func doDeload(_ p: Profile) {
+        for (k, s) in progress[p] ?? [:] {
             guard let x = EX(k) else { continue }
-            if let w = s.w, w != 0 { s.w = rnd(w * 0.9, inc(k) / 2) }
-            s.stall = 0
-            s.wins = 0
-            s.sets = x.s
+            var v = s.values
+            Logic.deload(&v, x: x, inc: inc(k))
+            s.values = v
         }
-        settings.deload = log.count
+        settings.setDeload(p, logCount(p))
         save()
     }
 
@@ -604,9 +678,10 @@ final class TrainingStore {
         saveGroups()
         if inSession, var a = active {
             for (i, e) in a.ex.enumerated() where e.id == old {
-                a.ex[i] = makeSessionEx(nid, a.readiness)
+                a.ex[i] = makeSessionEx(nid, a)
             }
             active = a
+            nextRef = [:]
             saveActive()
             save()
         }
@@ -624,7 +699,7 @@ final class TrainingStore {
     /// pickAdd(k) for mode "session".
     func addToSession(_ id: String) {
         guard var a = active else { return }
-        a.ex.append(makeSessionEx(id, a.readiness))
+        a.ex.append(makeSessionEx(id, a))
         active = a
         saveActive()
         save()
@@ -673,16 +748,14 @@ final class TrainingStore {
             id: id, n: name, m: g, t: g == "Ben" ? "l" : "u", lo: lo, hi: hi, s: sets, r: rest,
             d: f.desc.trimmingCharacters(in: .whitespacesAndNewlines)
         )
-        context.insert(CustomExercise(
-            id: id, n: def.n, m: def.m, t: def.t, lo: lo, hi: hi, s: sets, r: rest, d: def.d ?? ""
-        ))
+        context.insert(CustomExercise(def))
         customEx[id] = def
         var L = groupList(g)
         L.append(id)
         groups[g] = L
         let intoSession = toSession && active != nil
         if intoSession, var a = active {
-            a.ex.append(makeSessionEx(id, a.readiness))
+            a.ex.append(makeSessionEx(id, a))
             active = a
             saveActive()
         }
@@ -721,144 +794,114 @@ final class TrainingStore {
         save()
     }
 
-    // MARK: - udvikling
-
-    func exStats(_ id: String) -> [StatRow] {
-        var rows: [StatRow] = []
-        for l in log {
-            for e in l.entries where e.ex == id && !e.sets.isEmpty {
-                var best = e.sets[0]
-                var be = e1rm(best.w, best.r, best.rir)
-                var top = 0.0
-                var vol = 0.0
-                for x in e.sets {
-                    let v = e1rm(x.w, x.r, x.rir)
-                    if v > be { be = v; best = x }
-                    if x.w > top { top = x.w }
-                    vol += x.w * x.r
-                }
-                rows.append(StatRow(date: l.date, best: best, e1: be, top: top, vol: vol, sets: e.sets.count))
-            }
-        }
-        return rows
-    }
-
-    static func volume(_ l: LogRecord) -> Double {
-        l.entries.reduce(0) { a, e in a + e.sets.reduce(0) { $0 + $1.w * $1.r } }
-    }
-
-    static func setCount(_ l: LogRecord) -> Int {
-        l.entries.reduce(0) { $0 + $1.sets.count }
-    }
-
     // MARK: - backup
 
-    /// JSON.stringify(D)
-    func exportData() -> Data {
-        var ex: [String: Any] = [:]
-        for (id, p) in progress {
-            var item: [String: Any] = ["sets": p.sets, "stall": p.stall, "wins": p.wins]
-            if let w = p.w {
-                item["w"] = w
-            } else {
-                item["w"] = NSNull()
-            }
-            ex[id] = item
+    /// Hele datasættet som værdier (til backup i baggrunden).
+    func snapshot() -> BackupData {
+        func data(_ p: Profile) -> ProfileData {
+            var ex: [String: ProgressValues] = [:]
+            for (id, s) in progress[p] ?? [:] { ex[id] = s.values }
+            return ProfileData(name: name(of: p), ex: ex, log: logs[p] ?? [], deload: settings.deload(p))
         }
-
-        var logArr: [Any] = []
-        for l in log {
-            var entries: [Any] = []
-            for e in l.entries {
-                var sets: [Any] = []
-                for x in e.sets {
-                    let set: [String: Any] = ["w": x.w, "r": x.r, "rir": x.rir]
-                    sets.append(set)
-                }
-                let entry: [String: Any] = ["ex": e.ex, "sets": sets]
-                entries.append(entry)
-            }
-            var item: [String: Any] = [:]
-            item["name"] = l.name
-            item["groups"] = l.groups
-            item["date"] = l.date
-            item["ts"] = Int64(l.ts)
-            item["readiness"] = l.readiness
-            item["entries"] = entries
-            logArr.append(item)
-        }
-
-        var custom: [String: Any] = [:]
-        for (id, c) in customEx {
-            var item: [String: Any] = [:]
-            item["n"] = c.n
-            item["m"] = c.m
-            item["t"] = c.t
-            item["lo"] = c.lo
-            item["hi"] = c.hi
-            item["s"] = c.s
-            item["r"] = c.r
-            item["d"] = c.d ?? ""
-            custom[id] = item
-        }
-
-        var d: [String: Any] = [:]
-        d["v"] = 3
-        d["groups"] = groups
-        d["inc"] = ["u": settings.incU, "l": settings.incL]
-        d["ex"] = ex
-        d["log"] = logArr
-        d["deload"] = settings.deload
-        d["customEx"] = custom
-        d["favs"] = favs
-        return (try? JSONSerialization.data(withJSONObject: d, options: [.withoutEscapingSlashes])) ?? Data()
+        return BackupData(
+            sourceVersion: 4,
+            groups: groups,
+            incU: settings.incU,
+            incL: settings.incL,
+            customEx: customEx.values.sorted { $0.id < $1.id },
+            favs: favs,
+            louis: data(.louis),
+            buddy: data(.buddy)
+        )
     }
 
-    /// Erstatter alle data med backuppen (doImport efter bekræftelse).
-    func applyBackup(_ b: BackupData) {
-        replaceAll(with: b)
+    /// JSON.stringify(D), lavet i baggrunden.
+    func exportData() async -> Data {
+        let snap = snapshot()
+        return await Task.detached(priority: .userInitiated) { Backup.serialize(snap) }.value
+    }
+
+    private func weeklyBackupIfDue() {
+        guard isLoaded, BackupFiles.weeklyDue else { return }
+        let snap = snapshot()
+        Task.detached(priority: .background) {
+            BackupFiles.writeWeekly(Backup.serialize(snap))
+        }
+    }
+
+    /// Kaldes, når appen kommer i forgrunden.
+    func appDidBecomeActive() {
+        timers.checkExpired()
+        weeklyBackupIfDue()
+    }
+
+    /// Erstatter data med backuppen. En v4-backup erstatter alt. En v2/v3-backup er Louis' data;
+    /// `keepBuddy` afgør, om makkerens data beholdes.
+    func applyBackup(_ b: BackupData, keepBuddy: Bool) {
+        var data = b
+        if b.buddy == nil {
+            let current = snapshot().buddy
+            data.buddy = keepBuddy ? current : ProfileData(name: current?.name ?? "Makker", ex: [:], log: [], deload: 0)
+        }
+        replaceAll(with: data)
         toast("Backup gendannet.")
     }
 
-    /// wipe(): D=migrate(fresh()), active=null, picked=[].
+    /// wipe(): alt slettes, også makkerens data.
     func wipe() {
         replaceAll(with: BackupData(
-            groups: Catalog.defaultGroups, incU: 2.5, incL: 5, ex: [:], log: [], deload: 0, customEx: [], favs: []
+            sourceVersion: 4, groups: Catalog.defaultGroups, incU: 2.5, incL: 5, customEx: [], favs: [],
+            louis: ProfileData(name: "Louis", ex: [:], log: [], deload: 0),
+            buddy: ProfileData(name: settings.buddyName, ex: [:], log: [], deload: 0)
         ))
         active = nil
         picked = []
+        nextRef = [:]
         saveActive()
-        timer.stop()
+        timers.stopAll()
         toast("Alt er slettet.")
     }
 
+    private func deleteAll<T: PersistentModel>(_ type: T.Type) {
+        do {
+            try context.delete(model: type)
+        } catch {
+            for m in (try? context.fetch(FetchDescriptor<T>())) ?? [] { context.delete(m) }
+        }
+    }
+
     private func replaceAll(with b: BackupData) {
-        for m in (try? context.fetch(FetchDescriptor<WorkoutLog>())) ?? [] { context.delete(m) }
-        for m in (try? context.fetch(FetchDescriptor<ExerciseProgress>())) ?? [] { context.delete(m) }
-        for m in (try? context.fetch(FetchDescriptor<CustomExercise>())) ?? [] { context.delete(m) }
+        deleteAll(WorkoutLog.self)
+        deleteAll(ProfileProgress.self)
+        deleteAll(CustomExercise.self)
+        deleteAll(ExerciseProgress.self)
         save()
 
         customEx = [:]
         for c in b.customEx {
             customEx[c.id] = c
-            context.insert(CustomExercise(
-                id: c.id, n: c.n, m: c.m, t: c.t, lo: c.lo, hi: c.hi, s: c.s, r: c.r, d: c.d ?? ""
-            ))
+            context.insert(CustomExercise(c))
         }
-        progress = [:]
-        for (id, p) in b.ex {
-            let m = ExerciseProgress(
-                id: id, w: p.w, sets: p.sets ?? EX(id)?.s ?? 3, stall: p.stall, wins: p.wins
-            )
-            context.insert(m)
-            progress[id] = m
+
+        let buddy = b.buddy ?? ProfileData(name: settings.buddyName, ex: [:], log: [], deload: 0)
+        progress = [.louis: [:], .buddy: [:]]
+        for (p, d) in [(Profile.louis, b.louis), (Profile.buddy, buddy)] {
+            for (id, v) in d.ex {
+                let m = ProfileProgress(profile: p, ex: id, values: v)
+                context.insert(m)
+                progress[p, default: [:]][id] = m
+            }
+            let recs = d.log.map { r -> LogRecord in
+                var r = r
+                r.profile = p
+                return r
+            }
+            for r in recs { context.insert(WorkoutLog(r)) }
+            logs[p] = recs
+            index[p] = ProfileIndex.build(recs)
+            settings.setDeload(p, d.deload)
         }
-        log = b.log.map { l in
-            // logGroups(l): gamle logposter uden groups får grupper udledt af øvelserne.
-            let gs = l.groups ?? groupsOfIds(l.entries.filter { !$0.sets.isEmpty }.map(\.ex))
-            return LogRecord(name: l.name, groups: gs, date: l.date, ts: l.ts, readiness: l.readiness, entries: l.entries)
-        }
-        for r in log { insertLog(r) }
+        settings.buddyName = buddy.name.isEmpty ? "Makker" : buddy.name
 
         groups = b.groups
         favs = b.favs
@@ -866,8 +909,7 @@ final class TrainingStore {
         settings.setFavs(favs)
         settings.incU = b.incU
         settings.incL = b.incL
-        settings.deload = b.deload
-        settings.v = 3
+        settings.v = 4
 
         if var a = active {
             a.ex = a.ex.filter { EX($0.id) != nil }
@@ -885,7 +927,7 @@ final class TrainingStore {
         return Double(raw)
     }
 
-    /// applyQuickParam()
+    /// applyQuickParam(): gælder Louis.
     func applyQuick(_ url: URL) {
         guard let w = URLComponents(url: url, resolvingAgainstBaseURL: false)?
             .queryItems?.first(where: { $0.name == "w" })?.value,
@@ -893,10 +935,12 @@ final class TrainingStore {
         if var a = active {
             var applied = false
             for i in a.ex.indices {
-                for j in a.ex[i].sets.indices where !applied && !a.ex[i].sets[j].done {
-                    a.ex[i].sets[j].w = fmt(n)
+                guard var person = a.ex[i][.louis] else { continue }
+                for j in person.sets.indices where !applied && !person.sets[j].done {
+                    person.sets[j].w = fmt(n)
                     applied = true
                 }
+                a.ex[i][.louis] = person
             }
             if applied {
                 active = a

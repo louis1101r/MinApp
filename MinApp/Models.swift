@@ -1,15 +1,18 @@
 import Foundation
 import SwiftData
 
-// Datamodellen spejler webappens D (v3). Feltnavnene er de samme, så en JSON-backup
-// fra webappen senere kan importeres 1:1.
+// Lageret (SwiftData). Hver række gemmes for sig, så en ændring kun skriver den række,
+// der er ændret. Loggen skrives kun ved afslutning; den aktive træning ligger i UserDefaults.
 //
-//   D.ex[id]        -> ExerciseProgress
-//   D.log[]         -> WorkoutLog
-//   D.customEx[id]  -> CustomExercise
-//   D.v, D.groups, D.inc, D.deload, D.favs -> AppSettings (én række)
+//   D.ex[id] per profil       -> ProfileProgress (nøgle "profil:øvelse")
+//   D.log[] per profil        -> WorkoutLog (profile)
+//   D.customEx[id]            -> CustomExercise
+//   v, groups, inc, favs, deload, makkerens navn -> AppSettings (én række)
+//
+// Alle ændringer fra v3 er nye felter med standardværdier eller nye tabeller, så SwiftData
+// migrerer automatisk. ExerciseProgress er v3's tabel; den læses én gang og tømmes.
 
-/// D.ex[id] = { w, sets, stall, wins }
+/// v3: D.ex[id] (kun Louis). Beholdes i skemaet, så gamle data kan læses ved migreringen.
 @Model
 final class ExerciseProgress {
     @Attribute(.unique) var id: String
@@ -27,27 +30,40 @@ final class ExerciseProgress {
     }
 }
 
-/// Ét sæt i en logpost: { w, r, rir }
-struct LogSet: Codable, Hashable {
-    var w: Double
-    var r: Double
-    var rir: Double
-}
-
-/// { ex: id, sets: [...] }
-struct LogEntry: Codable, Hashable {
+/// v4: D.ex[id] for én profil.
+@Model
+final class ProfileProgress {
+    @Attribute(.unique) var key: String
+    var profile: String
     var ex: String
-    var sets: [LogSet]
-}
+    var w: Double?
+    var sets: Int
+    var stall: Int
+    var wins: Int
 
-/// En logpost i hukommelsen (entries er afkodet én gang ved indlæsning).
-struct LogRecord: Hashable {
-    var name: String
-    var groups: [String]
-    var date: String
-    var ts: Double
-    var readiness: Int
-    var entries: [LogEntry]
+    init(profile: Profile, ex: String, values v: ProgressValues) {
+        self.key = Self.key(profile, ex)
+        self.profile = profile.rawValue
+        self.ex = ex
+        self.w = v.w
+        self.sets = v.sets
+        self.stall = v.stall
+        self.wins = v.wins
+    }
+
+    static func key(_ p: Profile, _ ex: String) -> String {
+        p.rawValue + ":" + ex
+    }
+
+    var values: ProgressValues {
+        get { ProgressValues(w: w, sets: sets, stall: stall, wins: wins) }
+        set {
+            w = newValue.w
+            sets = newValue.sets
+            stall = newValue.stall
+            wins = newValue.wins
+        }
+    }
 }
 
 /// D.log[] = { name, groups, date: "dd.mm.yyyy", ts, readiness, entries }
@@ -61,22 +77,29 @@ final class WorkoutLog {
     var readiness: Int
     /// entries gemt som JSON (samme form som i webappen).
     var entriesData: Data
+    /// v4: hvem træningen tilhører. Alle træninger fra før makker er Louis'.
+    var profile: String = "louis"
 
-    init(name: String, groups: [String], date: String, ts: Double, readiness: Int, entries: [LogEntry]) {
-        self.name = name
-        self.groups = groups
-        self.date = date
-        self.ts = ts
-        self.readiness = readiness
-        self.entriesData = (try? JSONEncoder().encode(entries)) ?? Data()
-    }
-
-    var entries: [LogEntry] {
-        (try? JSONDecoder().decode([LogEntry].self, from: entriesData)) ?? []
+    init(_ r: LogRecord) {
+        self.name = r.name
+        self.groups = r.groups
+        self.date = r.date
+        self.ts = r.ts
+        self.readiness = r.readiness
+        self.entriesData = (try? JSONEncoder().encode(r.entries)) ?? Data()
+        self.profile = r.profile.rawValue
     }
 
     var record: LogRecord {
-        LogRecord(name: name, groups: groups, date: date, ts: ts, readiness: readiness, entries: entries)
+        LogRecord(
+            profile: Profile(rawValue: profile) ?? .louis,
+            name: name,
+            groups: groups,
+            date: date,
+            ts: ts,
+            readiness: readiness,
+            entries: (try? JSONDecoder().decode([LogEntry].self, from: entriesData)) ?? []
+        )
     }
 }
 
@@ -93,16 +116,16 @@ final class CustomExercise {
     var r: Int
     var d: String
 
-    init(id: String, n: String, m: String, t: String, lo: Int, hi: Int, s: Int, r: Int, d: String) {
-        self.id = id
-        self.n = n
-        self.m = m
-        self.t = t
-        self.lo = lo
-        self.hi = hi
-        self.s = s
-        self.r = r
-        self.d = d
+    init(_ x: ExerciseDef) {
+        self.id = x.id
+        self.n = x.n
+        self.m = x.m
+        self.t = x.t
+        self.lo = x.lo
+        self.hi = x.hi
+        self.s = x.s
+        self.r = x.r
+        self.d = x.d ?? ""
     }
 
     var def: ExerciseDef {
@@ -110,19 +133,22 @@ final class CustomExercise {
     }
 }
 
-/// Resten af D: v, groups, inc {u, l}, deload, favs.
+/// Resten af D: v, groups, inc {u, l}, deload, favs + makkerens navn og deload.
 @Model
 final class AppSettings {
     var v: Int
     var incU: Double
     var incL: Double
+    /// Louis' deload (log.length ved sidste deload).
     var deload: Int
     /// groups: { Bryst: [ids], ... } gemt som JSON.
     var groupsData: Data
     /// favs: [["Bryst","Biceps"], ...] gemt som JSON.
     var favsData: Data
+    var buddyName: String = "Makker"
+    var buddyDeload: Int = 0
 
-    init(v: Int = 3, incU: Double = 2.5, incL: Double = 5, deload: Int = 0,
+    init(v: Int = 4, incU: Double = 2.5, incL: Double = 5, deload: Int = 0,
          groups: [String: [String]] = Catalog.defaultGroups, favs: [[String]] = []) {
         self.v = v
         self.incU = incU
@@ -147,27 +173,37 @@ final class AppSettings {
     func setFavs(_ f: [[String]]) {
         favsData = (try? JSONEncoder().encode(f)) ?? favsData
     }
+
+    func deload(_ p: Profile) -> Int {
+        p == .louis ? deload : buddyDeload
+    }
+
+    func setDeload(_ p: Profile, _ v: Int) {
+        if p == .louis { deload = v } else { buddyDeload = v }
+    }
 }
 
-// MARK: - Igangværende træning (treg_active)
+/// Indlæser hele loggen i baggrunden og bygger cachen, så appen starter hurtigt
+/// selv med tusindvis af træninger.
+@ModelActor
+actor LogLoader {
+    struct Result: Sendable {
+        var logs: [Profile: [LogRecord]]
+        var index: [Profile: ProfileIndex]
+    }
 
-/// Værdierne er strenge fra inputfelterne, som i webappen.
-struct ActiveSet: Codable, Hashable {
-    var w: String = ""
-    var r: String = ""
-    var rir: String = ""
-    var done: Bool = false
-}
-
-struct ActiveExercise: Codable, Hashable {
-    var id: String
-    var target: Double?
-    var sets: [ActiveSet]
-}
-
-struct ActiveSession: Codable, Hashable {
-    var name: String
-    var groups: [String]
-    var readiness: Int
-    var ex: [ActiveExercise]
+    func load() -> Result {
+        let d = FetchDescriptor<WorkoutLog>(sortBy: [SortDescriptor(\WorkoutLog.ts)])
+        let rows = (try? modelContext.fetch(d)) ?? []
+        var logs: [Profile: [LogRecord]] = [.louis: [], .buddy: []]
+        for row in rows {
+            let r = row.record
+            logs[r.profile, default: []].append(r)
+        }
+        var index: [Profile: ProfileIndex] = [:]
+        for p in Profile.allCases {
+            index[p] = ProfileIndex.build(logs[p] ?? [])
+        }
+        return Result(logs: logs, index: index)
+    }
 }

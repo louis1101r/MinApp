@@ -1,32 +1,43 @@
 import SwiftUI
 
-/// viewHist(): samlet volumen, øvelser med 1RM-kurver og de seneste træninger.
+/// viewHist(): samlet volumen, øvelser med 1RM-kurver og de seneste træninger, for den valgte profil.
 struct HistoryView: View {
     @Environment(TrainingStore.self) private var store
 
     var body: some View {
-        let ids = store.byGroupOrder(store.exKeys.filter { !store.exStats($0).isEmpty })
+        let p = store.histProfile
+        let ix = store.ix(p)
+        let ids = store.byGroupOrder(store.exKeys.filter { !ix.exStats($0).isEmpty })
 
         VStack(alignment: .leading, spacing: 0) {
-            if ids.isEmpty {
+            SegmentPicker(
+                items: Profile.allCases.map { ($0, store.name(of: $0)) },
+                value: Binding(get: { store.histProfile }, set: { store.histProfile = $0 })
+            )
+            .padding(.bottom, 22)
+
+            if !store.isLoaded {
+                Text("Indlæser…")
+                    .leadStyle()
+            } else if ids.isEmpty {
                 Text("Ingen data endnu")
                     .displayStyle()
-                Text("Efter din første træning står hver øvelse her med en kurve over din udvikling.")
+                Text(emptyText(p))
                     .leadStyle()
                     .padding(.top, 8)
             } else {
                 Text("Udvikling")
                     .displayStyle(28)
-                Text("Kurverne viser din estimerede 1RM over tid. Tryk på en øvelse for den store graf.")
+                Text("Kurverne viser den estimerede 1RM over tid. Tryk på en øvelse for den store graf.")
                     .leadStyle()
                     .padding(.top, 8)
 
-                let last12 = Array(store.log.suffix(12))
+                let last12 = Array(ix.summaries.suffix(12))
                 Sec {
                     SectionTitle(text: "Samlet volumen per træning")
                     if !last12.isEmpty {
                         VolumeChart(
-                            vols: last12.map { TrainingStore.volume($0) },
+                            vols: last12.map(\.volume),
                             firstDate: last12.first?.date ?? "",
                             lastDate: last12.last?.date ?? ""
                         )
@@ -36,7 +47,7 @@ struct HistoryView: View {
                 SectionTitle(text: "Øvelser")
                     .padding(.top, 30)
                     .padding(.bottom, 10)
-                ExerciseTable(ids: ids)
+                ExerciseTable(ids: ids, index: ix)
                 Text("1RM er et estimat af, hvad du kunne tage én gang, regnet ud fra vægt, gentagelser og hvad du havde i tanken. Det er den kurve, der skal stige, ikke nødvendigvis vægten.")
                     .smallMuted()
                     .padding(.top, 12)
@@ -44,7 +55,7 @@ struct HistoryView: View {
                 Sec {
                     SectionTitle(text: "Træninger")
                     VStack(spacing: 0) {
-                        ForEach(Array(store.log.reversed().prefix(30).enumerated()), id: \.offset) { _, l in
+                        ForEach(Array(ix.summaries.suffix(30).reversed().enumerated()), id: \.offset) { _, l in
                             LogRow(l: l)
                         }
                     }
@@ -53,6 +64,14 @@ struct HistoryView: View {
         }
         .foregroundStyle(T.ink)
         .padding(.top, 22)
+        .id(p)
+    }
+
+    private func emptyText(_ p: Profile) -> String {
+        if p == .louis {
+            return "Efter din første træning står hver øvelse her med en kurve over din udvikling."
+        }
+        return "Når I har trænet sammen, står " + store.name(of: p) + "s øvelser her med en kurve over udviklingen."
     }
 }
 
@@ -61,6 +80,7 @@ struct ExerciseTable: View {
     @Environment(TrainingStore.self) private var store
     @Environment(\.present) private var present
     let ids: [String]
+    let index: ProfileIndex
 
     var body: some View {
         VStack(spacing: 0) {
@@ -85,7 +105,7 @@ struct ExerciseTable: View {
     }
 
     private func row(_ id: String, _ idx: Int) -> some View {
-        let r = store.exStats(id)
+        let r = index.exStats(id)
         let last = r[r.count - 1]
         let first = r[0]
         let d: Double = r.count > 1 ? (last.e1 - first.e1) / first.e1 * 100 : 0
@@ -130,14 +150,14 @@ struct ExerciseTable: View {
 
 /// Træninger: navn · sæt · tons · dato
 struct LogRow: View {
-    let l: LogRecord
+    let l: LogSummary
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
             Text(l.name)
                 .font(.system(size: 15))
             Spacer()
-            Text("\(TrainingStore.setCount(l)) sæt · \(fmt(TrainingStore.volume(l) / 1000)) t · \(l.date)")
+            Text("\(l.setCount) sæt · \(fmt(l.volume / 1000)) t · \(l.date)")
                 .font(.system(size: 13))
                 .monospacedDigit()
                 .foregroundStyle(T.muted)
@@ -156,8 +176,9 @@ struct StatsView: View {
     @State private var metric: Metric = .e1
 
     var body: some View {
-        let r = store.exStats(id)
-        InfoSheet(title: store.name(id), close: { closeSheet() }) {
+        let r = store.ix(store.histProfile).exStats(id)
+        let who = store.histProfile == .louis ? "" : " · " + store.name(of: store.histProfile)
+        InfoSheet(title: store.name(id) + who, close: { closeSheet() }) {
             NavigationLink(value: SheetPush.info(id)) {
                 Text("ⓘ Om øvelsen")
             }

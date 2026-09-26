@@ -1,9 +1,10 @@
 import SwiftUI
 
 /// Slutskærmen efter finish(): "Programmet er justeret" med vægtene talt op fra gammel til ny.
+/// Træner I sammen, vises justeringerne per person.
 struct FinishView: View {
     @Environment(TrainingStore.self) private var store
-    let adjustments: [Adjustment]
+    let groups: [FinishGroup]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -15,12 +16,20 @@ struct FinishView: View {
                 .padding(.top, 8)
                 .padding(.bottom, 20)
 
-            ForEach(adjustments) { a in
-                AdjustmentRow(a: a)
+            ForEach(groups) { g in
+                if groups.count > 1 {
+                    SectionTitle(text: g.name)
+                        .padding(.top, 18)
+                        .padding(.bottom, 4)
+                        .overlay(alignment: .top) { Rectangle().fill(T.line).frame(height: 2) }
+                }
+                ForEach(g.items) { a in
+                    AdjustmentRow(a: a)
+                }
             }
 
             Button("Færdig") {
-                withAnimation(.easeOut(duration: 0.18)) { store.adjustments = nil }
+                withAnimation(.easeOut(duration: 0.18)) { store.finishGroups = nil }
             }
             .buttonStyle(BlockButtonStyle())
             .padding(.top, 24)

@@ -2,6 +2,7 @@ import SwiftUI
 import UIKit
 
 /// viewSession(): igangværende træning med sæt-tabel, ✓-knap og pause.
+/// Træner I sammen, har hvert sæt en række per person.
 struct SessionView: View {
     @Environment(TrainingStore.self) private var store
     @Environment(\.present) private var present
@@ -9,8 +10,9 @@ struct SessionView: View {
 
     var body: some View {
         if let a = store.active {
-            let totalSets = a.ex.reduce(0) { $0 + $1.sets.count }
-            let doneSets = a.ex.reduce(0) { $0 + $1.sets.filter(\.done).count }
+            let all = a.ex.flatMap { e in e.people.values.flatMap(\.sets) }
+            let totalSets = all.count
+            let doneSets = all.filter(\.done).count
             let pct = totalSets > 0 ? Double(doneSets) / Double(totalSets) : 0
 
             VStack(alignment: .leading, spacing: 0) {
@@ -21,6 +23,11 @@ struct SessionView: View {
                     Spacer()
                     Button("Afbryd") { confirmCancel = true }
                         .buttonStyle(TextLinkStyle(color: T.red))
+                }
+                if a.together {
+                    Text("Sammen: " + a.profiles.map { store.name(of: $0) }.joined(separator: " og "))
+                        .leadStyle()
+                        .padding(.top, 4)
                 }
                 ProgressBar(value: pct)
                     .padding(.top, 16)
@@ -36,7 +43,7 @@ struct SessionView: View {
                 }
 
                 ForEach(Array(a.ex.enumerated()), id: \.offset) { i, e in
-                    ExerciseBlock(i: i, e: e)
+                    ExerciseBlock(i: i, e: e, profiles: a.profiles)
                 }
 
                 Button("+ Tilføj øvelse") {
@@ -46,11 +53,12 @@ struct SessionView: View {
                 .buttonStyle(BlockButtonStyle(outline: true))
                 .padding(.top, 22)
 
-                Button("Afslut og opdatér vægtene") {
+                Button(store.isLoaded ? "Afslut og opdatér vægtene" : "Indlæser…") {
                     hideKeyboard()
                     withAnimation(.easeOut(duration: 0.18)) { store.finish() }
                 }
                 .buttonStyle(BlockButtonStyle())
+                .disabled(!store.isLoaded)
                 .padding(.top, 12)
                 .padding(.bottom, 10)
             }
@@ -92,9 +100,15 @@ struct ExerciseBlock: View {
     @State private var confirmRemove = false
     let i: Int
     let e: ActiveExercise
+    let profiles: [Profile]
+
+    private var together: Bool { profiles.count > 1 }
 
     var body: some View {
         let x = store.EX(e.id)
+        let maxSets = profiles.map { e[$0]?.sets.count ?? 0 }.max() ?? 0
+        let stalledNames = profiles.filter { store.stall(e.id, $0) >= 1 }.map { store.name(of: $0) }
+
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .top, spacing: 8) {
                 VStack(alignment: .leading, spacing: 3) {
@@ -116,18 +130,23 @@ struct ExerciseBlock: View {
                         .accessibilityLabel("Om øvelsen")
                     }
                     if let x {
-                        Text(targetText(x))
-                            .font(.system(size: 13))
-                            .monospacedDigit()
-                            .foregroundStyle(T.muted)
+                        ForEach(profiles, id: \.self) { p in
+                            if let person = e[p] {
+                                Text(targetText(x, person, p))
+                                    .font(.system(size: 13))
+                                    .monospacedDigit()
+                                    .foregroundStyle(T.muted)
+                            }
+                        }
                     }
                 }
                 Spacer(minLength: 0)
-                if store.stall(e.id) >= 1 {
-                    Text("⚠ stagneret")
+                if !stalledNames.isEmpty {
+                    Text(together ? "⚠ stagneret: " + stalledNames.joined(separator: ", ") : "⚠ stagneret")
                         .font(.system(size: 11, weight: .bold))
                         .foregroundStyle(T.red)
-                        .fixedSize()
+                        .multilineTextAlignment(.trailing)
+                        .frame(maxWidth: 110, alignment: .trailing)
                         .padding(.top, 4)
                 }
                 Button {
@@ -149,11 +168,23 @@ struct ExerciseBlock: View {
                 .padding(.trailing, -10)
             }
 
-            SetHeader()
+            SetHeader(together: together)
                 .padding(.top, 14)
 
-            ForEach(Array(e.sets.enumerated()), id: \.offset) { j, s in
-                SetRow(i: i, j: j, set: s, target: e.target, hi: x?.hi ?? 0)
+            ForEach(0..<maxSets, id: \.self) { j in
+                if together && j > 0 {
+                    Rectangle().fill(T.hair).frame(height: 1).padding(.vertical, 4)
+                }
+                ForEach(profiles, id: \.self) { p in
+                    if let person = e[p], person.sets.indices.contains(j) {
+                        SetRow(
+                            i: i, j: j, profile: p,
+                            label: rowLabel(j, p),
+                            together: together,
+                            set: person.sets[j], target: person.target, hi: x?.hi ?? 0
+                        )
+                    }
+                }
             }
 
             HStack(spacing: 10) {
@@ -187,11 +218,19 @@ struct ExerciseBlock: View {
         }
     }
 
-    private func targetText(_ x: ExerciseDef) -> String {
-        if let t = e.target {
-            return "\(e.sets.count) × \(x.lo)–\(x.hi) ved \(fmt(t)) kg"
+    /// Sætnummer, og ved træn sammen også navnet ("1 Louis" / "Anna").
+    private func rowLabel(_ j: Int, _ p: Profile) -> String {
+        if !together { return "\(j + 1)" }
+        let first = p == profiles.first
+        return (first ? "\(j + 1) " : "") + store.name(of: p)
+    }
+
+    private func targetText(_ x: ExerciseDef, _ person: ActivePerson, _ p: Profile) -> String {
+        let prefix = together ? store.name(of: p) + ": " : ""
+        if let t = person.target {
+            return prefix + "\(person.sets.count) × \(x.lo)–\(x.hi) ved \(fmt(t)) kg"
         }
-        return "Vælg en vægt du kan tage \(x.lo)–\(x.hi) gange med 2 i tanken"
+        return prefix + "Vælg en vægt du kan tage \(x.lo)–\(x.hi) gange med 2 i tanken"
     }
 
     /// "Pause " + Math.round(r/6)/10 + " min"
@@ -203,16 +242,18 @@ struct ExerciseBlock: View {
 
 private enum Col {
     static let index: CGFloat = 22
+    static let name: CGFloat = 64
     static let tick: CGFloat = 52
     static let gap: CGFloat = 6
 }
 
 struct SetHeader: View {
     @Environment(\.present) private var present
+    var together = false
 
     var body: some View {
         HStack(spacing: Col.gap) {
-            Color.clear.frame(width: Col.index, height: 1)
+            Color.clear.frame(width: together ? Col.name : Col.index, height: 1)
             headerText("kg")
             headerText("gentagelser")
             Button {
@@ -247,17 +288,22 @@ struct SetRow: View {
     @Environment(TrainingStore.self) private var store
     let i: Int
     let j: Int
+    let profile: Profile
+    let label: String
+    let together: Bool
     let set: ActiveSet
     let target: Double?
     let hi: Int
 
     var body: some View {
         HStack(spacing: Col.gap) {
-            Text("\(j + 1)")
-                .font(.system(size: 13))
+            Text(label)
+                .font(.system(size: together ? 12 : 13, weight: together ? .semibold : .regular))
                 .monospacedDigit()
                 .foregroundStyle(T.muted)
-                .frame(width: Col.index, alignment: .leading)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .frame(width: together ? Col.name : Col.index, alignment: .leading)
             NumberField(
                 text: binding(\.w),
                 placeholder: target.map { fmt($0) } ?? "",
@@ -268,7 +314,7 @@ struct SetRow: View {
             NumberField(text: binding(\.rir), placeholder: "2", keyboard: .numberPad, done: set.done)
             Button {
                 hideKeyboard()
-                withAnimation(.easeOut(duration: 0.15)) { store.tick(i, j) }
+                withAnimation(.easeOut(duration: 0.15)) { store.tick(i, profile, j) }
             } label: {
                 Text(set.done ? "✓" : "○")
                     .font(.system(size: 14, weight: .bold))
@@ -286,11 +332,8 @@ struct SetRow: View {
 
     private func binding(_ k: WritableKeyPath<ActiveSet, String>) -> Binding<String> {
         Binding(
-            get: {
-                guard let a = store.active, a.ex.indices.contains(i), a.ex[i].sets.indices.contains(j) else { return "" }
-                return a.ex[i].sets[j][keyPath: k]
-            },
-            set: { store.setVal(i, j, k, $0) }
+            get: { store.value(i, profile, j, k) },
+            set: { store.setVal(i, profile, j, k, $0) }
         )
     }
 }
