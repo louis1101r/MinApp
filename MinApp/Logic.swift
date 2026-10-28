@@ -44,7 +44,7 @@ enum Logic {
 
     /// Progressionen i finish() for én øvelse. `sets` må ikke være tom.
     /// Returnerer beskeden til slutskærmen.
-    /// Varighed i sekunder: fra start til det sidst afkrydsede sæt (ellers til nu), mindst 60.
+    /// Varighed i sekunder: fra start til seneste aktivitet (ellers til nu), mindst 60.
     /// Så en glemt "Afslut" ikke blæser varigheden op.
     static func duration(startedAt: Double?, lastAct: Double?, now: Double) -> Int? {
         guard let s = startedAt else { return nil }

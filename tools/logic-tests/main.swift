@@ -195,13 +195,15 @@ let oldRec = LogRecord(profile: .louis, name: "Bryst", groups: ["Bryst"], date: 
                        entries: [LogEntry(ex: "bench", sets: [LogSet(w: 80, r: 6, rir: 2)])])
 let durRec = LogRecord(profile: .louis, name: "Bryst", groups: ["Bryst"], date: "28.10.2026", ts: 1_700_000_000_000, readiness: 3,
                        entries: [LogEntry(ex: "bench", sets: [LogSet(w: 80, r: 6, rir: 2)])],
-                       startedAt: 1_699_999_000_000, dur: 2520)
+                       startedAt: 1_699_999_000_000, dur: 2520, utcOffset: 3600)
 let durBackup = Backup.serialize(BackupData(sourceVersion: 4, groups: full.groups, incU: 2.5, incL: 5, customEx: [], favs: [],
                                             louis: ProfileData(name: "Louis", ex: [:], log: [oldRec, durRec], deload: 0), buddy: nil))
 let durParsed = try Backup.parse(durBackup)
 eq(durParsed.louis.log[1].dur, 2520, "varighed bevaret i backup")
 eq(durParsed.louis.log[1].startedAt, 1_699_999_000_000, "starttidspunkt bevaret i backup")
+eq(durParsed.louis.log[1].utcOffset, 3600, "UTC-forskel bevaret i backup")
 eq(durParsed.louis.log[0].dur, nil, "ældre træning uden varighed")
+eq(durParsed.louis.log[0].utcOffset, nil, "ældre træning uden UTC-forskel")
 eq(durParsed.louis.log[0].startedAt, nil, "ældre træning uden starttidspunkt")
 let ixDur = ProfileIndex.build([oldRec, durRec])
 eq(ixDur.summaries.map(\.dur), [nil, 2520], "varighed i træningslisten")

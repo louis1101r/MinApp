@@ -150,7 +150,8 @@ enum Backup {
                 readiness: int(l["readiness"]) ?? 3,
                 entries: entries,
                 startedAt: dbl(l["startedAt"]),
-                dur: int(l["dur"])
+                dur: int(l["dur"]),
+                utcOffset: int(l["utcOffset"])
             ))
         }
         // Loggen holdes i tidsrækkefølge.
@@ -233,6 +234,7 @@ enum Backup {
             item["entries"] = entries
             if let s = l.startedAt { item["startedAt"] = Int64(s) }
             if let d = l.dur { item["dur"] = d }
+            if let o = l.utcOffset { item["utcOffset"] = o }
             logArr.append(item)
         }
 

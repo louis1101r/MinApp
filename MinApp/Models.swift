@@ -82,6 +82,7 @@ final class WorkoutLog {
     /// Millisekunder siden 1970 og varighed i sekunder. nil på ældre træninger.
     var startedAt: Double? = nil
     var dur: Int? = nil
+    var utcOffset: Int? = nil
 
     init(_ r: LogRecord) {
         self.name = r.name
@@ -93,6 +94,7 @@ final class WorkoutLog {
         self.profile = r.profile.rawValue
         self.startedAt = r.startedAt
         self.dur = r.dur
+        self.utcOffset = r.utcOffset
     }
 
     var record: LogRecord {
@@ -105,7 +107,8 @@ final class WorkoutLog {
             readiness: readiness,
             entries: (try? JSONDecoder().decode([LogEntry].self, from: entriesData)) ?? [],
             startedAt: startedAt,
-            dur: dur
+            dur: dur,
+            utcOffset: utcOffset
         )
     }
 }

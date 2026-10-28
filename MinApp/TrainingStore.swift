@@ -442,6 +442,7 @@ final class TrainingStore {
         for p in profiles { rd[p.rawValue] = readiness[p] ?? 3 }
         var a = ActiveSession(name: gs.joined(separator: " + "), groups: gs, profiles: profiles, readiness: rd, ex: [])
         a.startedAt = nowMs()
+        a.utcOffset = TimeZone.current.secondsFromGMT()
         a.ex = ids.map { makeSessionEx($0, a) }
         if let pending = consumePendingQuick(), !a.ex.isEmpty, var louis = a.ex[0][.louis], !louis.sets.isEmpty {
             louis.sets[0].w = fmt(pending)
@@ -477,6 +478,8 @@ final class TrainingStore {
               person.sets.indices.contains(j) else { return }
         person.sets[j][keyPath: k] = v
         a.ex[i][p] = person
+        // Sæt med vægt og reps logges også uden ✓, så indtastning tæller som aktivitet.
+        if !v.isEmpty { a.lastAct = nowMs() }
         active = a
         saveActive()
     }
@@ -646,7 +649,8 @@ final class TrainingStore {
                 readiness: a.readiness(p),
                 entries: entries,
                 startedAt: a.startedAt,
-                dur: dur
+                dur: dur,
+                utcOffset: a.utcOffset
             )
             context.insert(WorkoutLog(rec))
             logs[p, default: []].append(rec)

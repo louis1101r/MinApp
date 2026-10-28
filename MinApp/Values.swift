@@ -34,6 +34,8 @@ struct LogRecord: Hashable, Sendable {
     var startedAt: Double? = nil
     /// Varighed i sekunder.
     var dur: Int? = nil
+    /// Sekunder øst for UTC ved start (Google Health skal bruge den).
+    var utcOffset: Int? = nil
 }
 
 /// D.ex[id] = { w, sets, stall, wins }
@@ -103,8 +105,10 @@ struct ActiveSession: Codable, Hashable, Sendable {
     var ex: [ActiveExercise]
     /// Millisekunder siden 1970. nil på en træning, der var i gang, før varighed blev gemt.
     var startedAt: Double? = nil
-    /// Tidspunktet for det sidst afkrydsede sæt.
+    /// Tidspunktet for den seneste aktivitet (✓ eller indtastning).
     var lastAct: Double? = nil
+    /// Sekunder øst for UTC ved start.
+    var utcOffset: Int? = nil
 
     var together: Bool { profiles.count > 1 }
 
