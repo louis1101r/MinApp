@@ -6,12 +6,18 @@ struct FinishView: View {
     @Environment(TrainingStore.self) private var store
     let groups: [FinishGroup]
 
+    private var leadText: String {
+        var s = ""
+        if let d = store.finishDuration { s = "Træningen varede " + Logic.durText(d) + ". " }
+        return s + "Det her ligger klar, næste gang du rammer øvelserne."
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text("Programmet er justeret")
                 .displayStyle()
                 .fixedSize(horizontal: false, vertical: true)
-            Text("Det her ligger klar, næste gang du rammer øvelserne.")
+            Text(leadText)
                 .leadStyle()
                 .padding(.top, 8)
                 .padding(.bottom, 20)

@@ -31,9 +31,7 @@ struct SessionView: View {
                 }
                 ProgressBar(value: pct)
                     .padding(.top, 16)
-                Text("\(doneSets) af \(totalSets) sæt")
-                    .smallMuted()
-                    .monospacedDigit()
+                SessionStatus(done: doneSets, total: totalSets, startedAt: a.startedAt)
                     .padding(.top, 8)
 
                 if a.ex.isEmpty {
@@ -362,5 +360,29 @@ struct NumberField: View {
                 Rectangle().strokeBorder(focused ? T.blue : (done ? T.ink : T.hair), lineWidth: focused || done ? 2 : 1)
             )
             .animation(.easeOut(duration: 0.15), value: done)
+    }
+}
+
+/// "12 af 22 sæt · 47 min". Tiden opdateres hvert kvarter minut.
+private struct SessionStatus: View {
+    let done: Int
+    let total: Int
+    let startedAt: Double?
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 15)) { ctx in
+            Text(line(ctx.date))
+                .smallMuted()
+                .monospacedDigit()
+        }
+    }
+
+    private func line(_ now: Date) -> String {
+        var s = "\(done) af \(total) sæt"
+        if let st = startedAt {
+            let sec = max(0, Int((now.timeIntervalSince1970 * 1000 - st) / 1000))
+            s += " · " + Logic.durText(sec)
+        }
+        return s
     }
 }

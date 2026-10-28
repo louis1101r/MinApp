@@ -152,12 +152,18 @@ struct ExerciseTable: View {
 struct LogRow: View {
     let l: LogSummary
 
+    private var summary: String {
+        var s = "\(l.setCount) sæt · "
+        if let d = l.dur { s += Logic.durText(d) + " · " }
+        return s + "\(fmt(l.volume / 1000)) t · \(l.date)"
+    }
+
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
             Text(l.name)
                 .font(.system(size: 15))
             Spacer()
-            Text("\(l.setCount) sæt · \(fmt(l.volume / 1000)) t · \(l.date)")
+            Text(summary)
                 .font(.system(size: 13))
                 .monospacedDigit()
                 .foregroundStyle(T.muted)

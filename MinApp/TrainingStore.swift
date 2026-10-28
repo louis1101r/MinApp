@@ -61,6 +61,8 @@ final class TrainingStore {
     private(set) var picked: [String] = []
     /// Slutskærmen efter finish(). nil = ingen.
     var finishGroups: [FinishGroup]?
+    /// Varighed i sekunder for den træning, slutskærmen viser.
+    var finishDuration: Int?
     private(set) var toastMessage: String?
     private var toastTask: Task<Void, Never>?
     /// Det sæt per person, Live Activity viser som det næste ("Sæt færdigt").
@@ -439,6 +441,7 @@ final class TrainingStore {
         var rd: [String: Int] = [:]
         for p in profiles { rd[p.rawValue] = readiness[p] ?? 3 }
         var a = ActiveSession(name: gs.joined(separator: " + "), groups: gs, profiles: profiles, readiness: rd, ex: [])
+        a.startedAt = nowMs()
         a.ex = ids.map { makeSessionEx($0, a) }
         if let pending = consumePendingQuick(), !a.ex.isEmpty, var louis = a.ex[0][.louis], !louis.sets.isEmpty {
             louis.sets[0].w = fmt(pending)
@@ -495,6 +498,7 @@ final class TrainingStore {
                 person.sets[j + 1].w = s.w
             }
             a.ex[i][p] = person
+            a.lastAct = nowMs()
             active = a
             saveActive()
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
@@ -616,6 +620,7 @@ final class TrainingStore {
         var result: [FinishGroup] = []
         let ts = nowMs()
         let date = Logic.dateString(Date())
+        let dur = Logic.duration(startedAt: a.startedAt, lastAct: a.lastAct, now: ts)
         for p in a.profiles {
             var adj: [Adjustment] = []
             var entries: [LogEntry] = []
@@ -639,7 +644,9 @@ final class TrainingStore {
                 date: date,
                 ts: ts,
                 readiness: a.readiness(p),
-                entries: entries
+                entries: entries,
+                startedAt: a.startedAt,
+                dur: dur
             )
             context.insert(WorkoutLog(rec))
             logs[p, default: []].append(rec)
@@ -651,6 +658,7 @@ final class TrainingStore {
         nextRef = [:]
         saveActive()
         timers.stopAll()
+        finishDuration = dur
         finishGroups = result
     }
 

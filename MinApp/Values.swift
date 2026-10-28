@@ -30,6 +30,10 @@ struct LogRecord: Hashable, Sendable {
     var ts: Double
     var readiness: Int
     var entries: [LogEntry]
+    /// Millisekunder siden 1970. nil på træninger fra før varighed blev gemt.
+    var startedAt: Double? = nil
+    /// Varighed i sekunder.
+    var dur: Int? = nil
 }
 
 /// D.ex[id] = { w, sets, stall, wins }
@@ -97,6 +101,10 @@ struct ActiveSession: Codable, Hashable, Sendable {
     /// Dagsform per profil (nøgle: Profile.rawValue).
     var readiness: [String: Int]
     var ex: [ActiveExercise]
+    /// Millisekunder siden 1970. nil på en træning, der var i gang, før varighed blev gemt.
+    var startedAt: Double? = nil
+    /// Tidspunktet for det sidst afkrydsede sæt.
+    var lastAct: Double? = nil
 
     var together: Bool { profiles.count > 1 }
 

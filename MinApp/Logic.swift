@@ -44,6 +44,20 @@ enum Logic {
 
     /// Progressionen i finish() for én øvelse. `sets` må ikke være tom.
     /// Returnerer beskeden til slutskærmen.
+    /// Varighed i sekunder: fra start til det sidst afkrydsede sæt (ellers til nu), mindst 60.
+    /// Så en glemt "Afslut" ikke blæser varigheden op.
+    static func duration(startedAt: Double?, lastAct: Double?, now: Double) -> Int? {
+        guard let s = startedAt else { return nil }
+        let end = lastAct ?? now
+        return max(60, Int(((end - s) / 1000).rounded()))
+    }
+
+    static func durText(_ sec: Int) -> String {
+        let m = Int((Double(sec) / 60).rounded())
+        if m < 1 { return "under 1 min" }
+        return m < 60 ? "\(m) min" : "\(m / 60) t \(m % 60) min"
+    }
+
     static func progress(_ s: inout ProgressValues, x: ExerciseDef, sets: [LogSet], step: Double, readiness: Int) -> String {
         let minR = sets.map(\.r).min() ?? 0
         let top = sets.map(\.w).max() ?? 0
@@ -112,6 +126,7 @@ struct LogSummary: Hashable, Sendable {
     var ts: Double
     var setCount: Int
     var volume: Double
+    var dur: Int? = nil
 }
 
 /// Forudberegnet over én profils log. Bygges én gang og udvides ved hver afslutning,
@@ -155,7 +170,7 @@ struct ProfileIndex: Sendable {
                 StatRow(date: l.date, best: best, e1: be, top: top, vol: vol, sets: e.sets.count)
             )
         }
-        summaries.append(LogSummary(name: l.name, date: l.date, ts: l.ts, setCount: setCount, volume: volume))
+        summaries.append(LogSummary(name: l.name, date: l.date, ts: l.ts, setCount: setCount, volume: volume, dur: l.dur))
     }
 
     func exStats(_ id: String) -> [StatRow] {

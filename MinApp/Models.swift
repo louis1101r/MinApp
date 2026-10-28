@@ -79,6 +79,9 @@ final class WorkoutLog {
     var entriesData: Data
     /// v4: hvem træningen tilhører. Alle træninger fra før makker er Louis'.
     var profile: String = "louis"
+    /// Millisekunder siden 1970 og varighed i sekunder. nil på ældre træninger.
+    var startedAt: Double? = nil
+    var dur: Int? = nil
 
     init(_ r: LogRecord) {
         self.name = r.name
@@ -88,6 +91,8 @@ final class WorkoutLog {
         self.readiness = r.readiness
         self.entriesData = (try? JSONEncoder().encode(r.entries)) ?? Data()
         self.profile = r.profile.rawValue
+        self.startedAt = r.startedAt
+        self.dur = r.dur
     }
 
     var record: LogRecord {
@@ -98,7 +103,9 @@ final class WorkoutLog {
             date: date,
             ts: ts,
             readiness: readiness,
-            entries: (try? JSONDecoder().decode([LogEntry].self, from: entriesData)) ?? []
+            entries: (try? JSONDecoder().decode([LogEntry].self, from: entriesData)) ?? [],
+            startedAt: startedAt,
+            dur: dur
         )
     }
 }

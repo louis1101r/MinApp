@@ -181,6 +181,31 @@ let v3parsed = try Backup.parse(v3)
 eq(v3parsed.sourceVersion, 3, "v3 genkendt")
 check(v3parsed.buddy == nil, "v3 går kun til Louis")
 
+// MARK: varighed
+eq(Logic.duration(startedAt: 1_000_000, lastAct: 1_000_000 + 42 * 60_000, now: 1_000_000 + 47 * 60_000), 2520, "varigheden slutter ved sidste sæt")
+eq(Logic.duration(startedAt: 1_000_000, lastAct: nil, now: 1_000_000 + 30 * 60_000), 1800, "uden afkrydsede sæt: til nu")
+eq(Logic.duration(startedAt: 1_000_000, lastAct: 1_000_000 + 5_000, now: 1_000_000 + 9_000), 60, "mindst 60 sek.")
+eq(Logic.duration(startedAt: nil, lastAct: 5, now: 10), nil, "uden start ingen varighed")
+eq(Logic.durText(10), "under 1 min", "durText under 1 min")
+eq(Logic.durText(2520), "42 min", "durText minutter")
+eq(Logic.durText(3600), "1 t 0 min", "durText hel time")
+eq(Logic.durText(5700), "1 t 35 min", "durText time og minutter")
+
+let oldRec = LogRecord(profile: .louis, name: "Bryst", groups: ["Bryst"], date: "01.09.2026", ts: 1_600_000_000_000, readiness: 3,
+                       entries: [LogEntry(ex: "bench", sets: [LogSet(w: 80, r: 6, rir: 2)])])
+let durRec = LogRecord(profile: .louis, name: "Bryst", groups: ["Bryst"], date: "28.10.2026", ts: 1_700_000_000_000, readiness: 3,
+                       entries: [LogEntry(ex: "bench", sets: [LogSet(w: 80, r: 6, rir: 2)])],
+                       startedAt: 1_699_999_000_000, dur: 2520)
+let durBackup = Backup.serialize(BackupData(sourceVersion: 4, groups: full.groups, incU: 2.5, incL: 5, customEx: [], favs: [],
+                                            louis: ProfileData(name: "Louis", ex: [:], log: [oldRec, durRec], deload: 0), buddy: nil))
+let durParsed = try Backup.parse(durBackup)
+eq(durParsed.louis.log[1].dur, 2520, "varighed bevaret i backup")
+eq(durParsed.louis.log[1].startedAt, 1_699_999_000_000, "starttidspunkt bevaret i backup")
+eq(durParsed.louis.log[0].dur, nil, "ældre træning uden varighed")
+eq(durParsed.louis.log[0].startedAt, nil, "ældre træning uden starttidspunkt")
+let ixDur = ProfileIndex.build([oldRec, durRec])
+eq(ixDur.summaries.map(\.dur), [nil, 2520], "varighed i træningslisten")
+
 // Til webapp-testen
 let outDir = URL(fileURLWithPath: CommandLine.arguments.count > 1 ? CommandLine.arguments[1] : ".")
 try Backup.serialize(BackupData(sourceVersion: 4, groups: full.groups, incU: 2.5, incL: 5, customEx: full.customEx,
