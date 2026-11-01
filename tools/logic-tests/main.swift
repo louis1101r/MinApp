@@ -208,6 +208,26 @@ eq(durParsed.louis.log[0].startedAt, nil, "ældre træning uden starttidspunkt")
 let ixDur = ProfileIndex.build([oldRec, durRec])
 eq(ixDur.summaries.map(\.dur), [nil, 2520], "varighed i træningslisten")
 
+// MARK: Google Health
+do {
+    let w = GoogleWorkout(name: "Bryst + Triceps", startMs: 1_776_672_000_000, dur: 2520, utcOffset: 3600)
+    eq(w.id, "minapp-1776672000000", "id")
+    check(!w.isLong, "42 min er ikke lang")
+    check(GoogleWorkout(name: "x", startMs: 0, dur: 4 * 3600 + 1, utcOffset: 0).isLong, "over 4 timer er lang")
+    let b = w.body()
+    let ex = b["exercise"] as! [String: Any]
+    let iv = ex["interval"] as! [String: Any]
+    eq(iv["startTime"] as? String, "2026-04-20T08:00:00Z", "start i UTC")
+    eq(iv["endTime"] as? String, "2026-04-20T08:42:00Z", "slut = start + varighed")
+    eq(iv["startUtcOffset"] as? String, "3600s", "UTC-forskel")
+    eq(ex["exerciseType"] as? String, "STRENGTH_TRAINING", "type")
+    eq(ex["activeDuration"] as? String, "2520s", "varighed")
+    check(JSONSerialization.isValidJSONObject(b), "gyldig JSON")
+    eq(b["name"] as? String, "users/me/dataTypes/exercise/dataPoints/minapp-1776672000000", "name")
+    let neg = GoogleWorkout(name: "x", startMs: 0, dur: 60, utcOffset: -18000).body()["exercise"] as! [String: Any]
+    eq((neg["interval"] as! [String: Any])["endUtcOffset"] as? String, "-18000s", "negativ UTC-forskel")
+}
+
 // Til webapp-testen
 let outDir = URL(fileURLWithPath: CommandLine.arguments.count > 1 ? CommandLine.arguments[1] : ".")
 try Backup.serialize(BackupData(sourceVersion: 4, groups: full.groups, incU: 2.5, incL: 5, customEx: full.customEx,

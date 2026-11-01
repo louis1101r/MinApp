@@ -22,6 +22,16 @@ struct FinishView: View {
                 .padding(.top, 8)
                 .padding(.bottom, 20)
 
+            if let w = store.google.longPending {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Træningen varede \(Logic.durText(w.dur)). Glemte du at trykke Afslut? Den er ikke sendt til Google Health.")
+                        .smallMuted()
+                    Button("Send alligevel") { store.google.sendLongPending() }
+                        .buttonStyle(BlockButtonStyle(outline: true, small: true))
+                }
+                .padding(.bottom, 20)
+            }
+
             ForEach(groups) { g in
                 if groups.count > 1 {
                     SectionTitle(text: g.name)
@@ -35,6 +45,7 @@ struct FinishView: View {
             }
 
             Button("Færdig") {
+                store.google.longPending = nil
                 withAnimation(.easeOut(duration: 0.18)) { store.finishGroups = nil }
             }
             .buttonStyle(BlockButtonStyle())

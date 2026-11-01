@@ -34,5 +34,11 @@
 - `MinApp/Catalog+Builtin.swift` er genereret fra `docs/webapp.html` og skal ikke rettes i hånden.
 - Datamodel v4: to profiler (Louis og makker). Backupformatet er webappens v3 for Louis + feltet `buddy`. Ændres formatet, skal `Backup.parse` udvides og testene opdateres.
 
+## Google Health
+- MinApp/GoogleHealth.swift: login (ASWebAuthenticationSession + PKCE, iOS OAuth-klient uden hemmelighed), kø i UserDefaults og afsendelse til Google Health API. Refresh-token i Keychain.
+- MinApp/GoogleHealthCore.swift: den rene del (JSON-kroppen), testes lokalt.
+- Google Cloud-projekt: minapp-513409, testtilstand, testbruger louis.raben11@gmail.com, scope activity_and_fitness.writeonly. Client ID er ikke hemmeligt.
+- Kun Louis' træninger sendes. Over 4 timer spørger slutskærmen først.
+
 ## Kommunikation
 - Svar på dansk, kort og direkte.

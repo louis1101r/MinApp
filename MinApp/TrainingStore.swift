@@ -69,6 +69,7 @@ final class TrainingStore {
     @ObservationIgnored private var nextRef: [Profile: SetRef] = [:]
 
     let timers = RestTimers()
+    let google = GoogleHealth()
 
     private static let activeKey = "treg_active_v2"
     private static let legacyActiveKey = "treg_active"
@@ -624,6 +625,7 @@ final class TrainingStore {
         let ts = nowMs()
         let date = Logic.dateString(Date())
         let dur = Logic.duration(startedAt: a.startedAt, lastAct: a.lastAct, now: ts)
+        var louisWorkout: GoogleWorkout?
         for p in a.profiles {
             var adj: [Adjustment] = []
             var entries: [LogEntry] = []
@@ -653,6 +655,10 @@ final class TrainingStore {
                 utcOffset: a.utcOffset
             )
             context.insert(WorkoutLog(rec))
+            if p == .louis, !trained.isEmpty, let s = a.startedAt, let d = dur {
+                louisWorkout = GoogleWorkout(name: a.name, startMs: s, dur: d,
+                                             utcOffset: a.utcOffset ?? TimeZone.current.secondsFromGMT())
+            }
             logs[p, default: []].append(rec)
             index[p, default: ProfileIndex()].add(rec)
             result.append(FinishGroup(profile: p, name: name(of: p), items: adj))
@@ -664,6 +670,7 @@ final class TrainingStore {
         timers.stopAll()
         finishDuration = dur
         finishGroups = result
+        if let louisWorkout { google.workoutFinished(louisWorkout) }
     }
 
     func doDeload(_ p: Profile) {
@@ -845,6 +852,7 @@ final class TrainingStore {
     func appDidBecomeActive() {
         timers.checkExpired()
         weeklyBackupIfDue()
+        google.flush()
     }
 
     /// Erstatter data med backuppen. En v4-backup erstatter alt. En v2/v3-backup er Louis' data;

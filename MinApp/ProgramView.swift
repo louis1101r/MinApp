@@ -90,6 +90,7 @@ struct ProgramView: View {
                     .font(.system(size: 13))
             }
 
+            GoogleHealthSection()
             dataSection
         }
         .foregroundStyle(T.ink)

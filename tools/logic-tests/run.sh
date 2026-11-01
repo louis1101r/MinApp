@@ -5,7 +5,7 @@ cd "$(dirname "$0")/../.."
 OUT="$(mktemp -d)"
 trap 'rm -rf "$OUT"' EXIT
 swiftc -O -swift-version 5 \
-  MinApp/Catalog.swift MinApp/Catalog+Builtin.swift MinApp/Values.swift MinApp/Logic.swift MinApp/Backup.swift \
+  MinApp/Catalog.swift MinApp/Catalog+Builtin.swift MinApp/Values.swift MinApp/Logic.swift MinApp/Backup.swift MinApp/GoogleHealthCore.swift \
   tools/logic-tests/main.swift -o "$OUT/logic-tests"
 "$OUT/logic-tests" "$OUT"
 
