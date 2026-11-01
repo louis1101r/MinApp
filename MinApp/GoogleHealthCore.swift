@@ -41,11 +41,13 @@ struct GoogleWorkout: Codable, Hashable, Identifiable, Sendable {
             "interval": interval,
             "exerciseType": "STRENGTH_TRAINING",
             "displayName": name,
-            "activeDuration": "\(dur)s"
+            "activeDuration": "\(dur)s",
+            // Påkrævet af API'et, men alle felterne i det er valgfrie.
+            "metricsSummary": [String: Any]()
         ]
         return [
             "name": "users/me/dataTypes/exercise/dataPoints/\(id)",
-            "dataSource": ["recordingMethod": "ACTIVELY_MEASURED"],
+            "dataSource": ["recordingMethod": "MANUAL"],
             "exercise": exercise
         ]
     }

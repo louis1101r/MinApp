@@ -78,6 +78,8 @@ final class GoogleHealth {
         Task {
             await sendAll()
             busy = false
+            // En træning kan være kommet i køen, mens der blev sendt.
+            if lastError == nil && !needsLogin && !queue.isEmpty { flush() }
         }
     }
 

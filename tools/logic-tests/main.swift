@@ -222,6 +222,9 @@ do {
     eq(iv["startUtcOffset"] as? String, "3600s", "UTC-forskel")
     eq(ex["exerciseType"] as? String, "STRENGTH_TRAINING", "type")
     eq(ex["activeDuration"] as? String, "2520s", "varighed")
+    eq(ex["displayName"] as? String, "Bryst + Triceps", "displayName er påkrævet")
+    check(ex["metricsSummary"] is [String: Any], "metricsSummary er påkrævet")
+    eq((b["dataSource"] as? [String: String])?["recordingMethod"], "MANUAL", "indtastet manuelt")
     check(JSONSerialization.isValidJSONObject(b), "gyldig JSON")
     eq(b["name"] as? String, "users/me/dataTypes/exercise/dataPoints/minapp-1776672000000", "name")
     let neg = GoogleWorkout(name: "x", startMs: 0, dur: 60, utcOffset: -18000).body()["exercise"] as! [String: Any]
