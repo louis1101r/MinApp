@@ -268,6 +268,6 @@ enum Backup {
 
     private static func int(_ a: Any?) -> Int? {
         guard let v = dbl(a), v.isFinite else { return nil }
-        return Int(jsRound(v))
+        return jsInt(v)
     }
 }

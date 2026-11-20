@@ -67,6 +67,19 @@ func jsRound(_ x: Double) -> Double {
     (x + 0.5).rounded(.down)
 }
 
+/// Math.round(x) som heltal. Uendelig og NaN giver 0, for Int() af dem får appen til at gå ned.
+func jsInt(_ x: Double) -> Int {
+    let r = jsRound(x)
+    guard r.isFinite, abs(r) < 1e15 else { return 0 }
+    return Int(r)
+}
+
+/// Udvikling i procent fra første til sidste. nil, hvis den ikke kan regnes (fx første 1RM = 0).
+func changePct(_ first: Double, _ last: Double) -> Double? {
+    guard first > 0, first.isFinite, last.isFinite else { return nil }
+    return (last - first) / first * 100
+}
+
 /// rnd(v, s) = Math.round(v/s)*s
 func rnd(_ v: Double, _ s: Double) -> Double {
     jsRound(v / s) * s
@@ -78,7 +91,7 @@ func kg(_ v: Double) -> String {
     f.locale = Locale(identifier: "da_DK")
     f.numberStyle = .decimal
     f.maximumFractionDigits = 0
-    return (f.string(from: NSNumber(value: jsRound(v))) ?? String(Int(jsRound(v)))) + " kg"
+    return (f.string(from: NSNumber(value: jsRound(v))) ?? String(jsInt(v))) + " kg"
 }
 
 /// fmt(): én decimal, komma som decimaltegn, "–" for manglende værdi.
@@ -95,7 +108,9 @@ func fmt(_ v: Double?) -> String {
 func num(_ s: String) -> Double? {
     let t = s.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: ".")
     if t.isEmpty { return nil }
-    return Double(t)
+    // Double() læser også "inf" og "nan"; de er ikke gyldige vægte eller gentagelser.
+    guard let v = Double(t), v.isFinite else { return nil }
+    return v
 }
 
 /// Epley med "i tanken" lagt til.

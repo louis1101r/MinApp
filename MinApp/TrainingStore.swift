@@ -359,7 +359,7 @@ final class TrainingStore {
     }
 
     func daysAgo(_ ts: Double) -> Int {
-        Int(jsRound((dayStart(nowMs()) - dayStart(ts)) / 86_400_000))
+        jsInt((dayStart(nowMs()) - dayStart(ts)) / 86_400_000)
     }
 
     func agoTxt(_ ts: Double?) -> String {
@@ -757,11 +757,11 @@ final class TrainingStore {
             let v = num(s) ?? 0
             return v == 0 || v.isNaN ? d : v
         }
-        var lo = max(1, Int(jsRound(orDefault(f.lo, 8))))
-        var hi = max(1, Int(jsRound(orDefault(f.hi, 12))))
+        var lo = max(1, jsInt(orDefault(f.lo, 8)))
+        var hi = max(1, jsInt(orDefault(f.hi, 12)))
         if lo > hi { swap(&lo, &hi) }
-        let sets = min(8, max(1, Int(jsRound(orDefault(f.sets, 3)))))
-        let rest = max(15, Int(jsRound(orDefault(f.rest, 90))))
+        let sets = min(8, max(1, jsInt(orDefault(f.sets, 3))))
+        let rest = max(15, jsInt(orDefault(f.rest, 90)))
         let id = "custom_" + String(Int(nowMs()), radix: 36)
         let def = ExerciseDef(
             id: id, n: name, m: g, t: g == "Ben" ? "l" : "u", lo: lo, hi: hi, s: sets, r: rest,

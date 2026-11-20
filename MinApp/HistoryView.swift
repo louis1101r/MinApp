@@ -108,8 +108,9 @@ struct ExerciseTable: View {
         let r = index.exStats(id)
         let last = r[r.count - 1]
         let first = r[0]
-        let d: Double = r.count > 1 ? (last.e1 - first.e1) / first.e1 * 100 : 0
-        let ds: String = r.count > 1 ? percentText(d) : "ny"
+        let change = r.count > 1 ? changePct(first.e1, last.e1) : nil
+        let d = change ?? 0
+        let ds: String = r.count <= 1 ? "ny" : (change.map(percentText) ?? "–")
         let color = d > 0.5 ? T.blue : (d < -0.5 ? T.red : T.muted)
         let changeColor = d > 0.5 ? T.blue : (d < -0.5 ? T.red : T.ink)
         return Button {
@@ -121,7 +122,7 @@ struct ExerciseTable: View {
                         .font(.system(size: 15, weight: .semibold))
                         .tracking(-0.15)
                         .multilineTextAlignment(.leading)
-                    Text("\(store.EX(id)?.m ?? "") · 1RM \(Int(jsRound(last.e1))) kg")
+                    Text("\(store.EX(id)?.m ?? "") · 1RM \(jsInt(last.e1)) kg")
                         .font(.system(size: 11))
                         .foregroundStyle(T.muted)
                 }
@@ -191,11 +192,11 @@ struct StatsView: View {
             .buttonStyle(TextLinkStyle())
 
             if let last = r.last, let first = r.first {
-                let d: Double = r.count > 1 ? (last.e1 - first.e1) / first.e1 * 100 : 0
+                let d = r.count > 1 ? changePct(first.e1, last.e1) : nil
                 Text("Estimeret 1RM nu")
                     .leadStyle()
                     .padding(.top, 10)
-                Text("\(Int(jsRound(last.e1))) kg")
+                Text("\(jsInt(last.e1)) kg")
                     .font(.system(size: 46, weight: .heavy))
                     .tracking(-1.6)
                     .monospacedDigit()
@@ -220,9 +221,10 @@ struct StatsView: View {
         }
     }
 
-    private func changeText(_ d: Double, count: Int, firstE1: Double) -> String {
+    private func changeText(_ d: Double?, count: Int, firstE1: Double) -> String {
         if count <= 1 { return "Første logning. Kom igen." }
-        let first = String(Int(jsRound(firstE1)))
+        let first = String(jsInt(firstE1))
+        guard let d else { return "Første logning var " + first + " kg, så udviklingen kan ikke vises i procent." }
         return percentText(d) + " siden første logning (" + first + " kg)"
     }
 }
@@ -230,7 +232,7 @@ struct StatsView: View {
 /// (d>0?"+":"")+Math.round(d)+" %"
 func percentText(_ d: Double) -> String {
     let sign = d > 0 ? "+" : ""
-    return sign + String(Int(jsRound(d))) + " %"
+    return sign + String(jsInt(d)) + " %"
 }
 
 /// .pick.seg: 1RM · Tungeste sæt · Volumen
@@ -272,7 +274,7 @@ struct StatTable: View {
         VStack(spacing: 0) {
             line(["Dato", "Bedste sæt", "Sæt", "1RM"], header: true)
             ForEach(Array(rows.reversed().enumerated()), id: \.offset) { _, x in
-                line([x.date, fmt(x.best.w) + " × " + fmt(x.best.r), "\(x.sets)", "\(Int(jsRound(x.e1)))"], header: false)
+                line([x.date, fmt(x.best.w) + " × " + fmt(x.best.r), "\(x.sets)", "\(jsInt(x.e1))"], header: false)
             }
         }
         .overlay(alignment: .top) { Rectangle().fill(T.line).frame(height: 2) }

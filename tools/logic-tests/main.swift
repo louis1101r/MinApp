@@ -208,6 +208,17 @@ eq(durParsed.louis.log[0].startedAt, nil, "ældre træning uden starttidspunkt")
 let ixDur = ProfileIndex.build([oldRec, durRec])
 eq(ixDur.summaries.map(\.dur), [nil, 2520], "varighed i træningslisten")
 
+// MARK: tal, der ellers kan få appen til at gå ned
+eq(jsInt(Double.infinity), 0, "jsInt uendelig")
+eq(jsInt(Double.nan), 0, "jsInt NaN")
+eq(jsInt(97.5), 98, "jsInt runder som Math.round")
+eq(changePct(0, 40), nil, "udvikling fra 0 kan ikke regnes")
+eq(changePct(0, 0), nil, "udvikling fra 0 til 0")
+eq(changePct(80, 100), 25, "udvikling i procent")
+eq(num("inf"), nil, "inf er ikke et tal")
+eq(num("nan"), nil, "nan er ikke et tal")
+eq(num("72,5"), 72.5, "komma som decimal")
+
 // MARK: Google Health
 do {
     let w = GoogleWorkout(name: "Bryst + Triceps", startMs: 1_776_672_000_000, dur: 2520, utcOffset: 3600)
